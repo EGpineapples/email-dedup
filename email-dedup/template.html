@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email Toolkit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+--bg:#0e1117;--surface:#161b22;--surface-2:#1c2333;--border:#2a3142;
+--text:#e2e8f0;--text-dim:#8b95a5;--accent:#3d8bfd;--accent-soft:#3d8bfd18;
+--green:#34d399;--green-soft:#34d39918;--amber:#fbbf24;--amber-soft:#fbbf2418;
+--violet:#a78bfa;--violet-soft:#a78bfa18;--rose:#fb7185;--rose-soft:#fb718518;
+--red:#f87171;--cyan:#22d3ee;--cyan-soft:#22d3ee18;
+--radius:12px;
+--font-ui:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;
+--font-mono:'IBM Plex Mono','Menlo','Consolas',monospace;
+}
+body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5;-webkit-font-smoothing:antialiased}
+.app{max-width:1200px;margin:0 auto;padding:40px 20px 80px}
+header{text-align:center;margin-bottom:32px}
+header h1{font-size:30px;font-weight:700;letter-spacing:-.8px;margin-bottom:6px}
+header h1 span{color:var(--accent)}
+header p{color:var(--text-dim);font-size:13px}
+.tab-bar{display:flex;gap:3px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:3px;margin-bottom:32px}
+.tab-btn{flex:1;padding:9px 10px;font-family:var(--font-ui);font-size:13px;font-weight:500;color:var(--text-dim);background:0;border:0;border-radius:7px;cursor:pointer;transition:color .2s,background .2s;display:flex;align-items:center;justify-content:center;gap:6px}
+.tab-btn:hover{color:var(--text)}.tab-btn.active{background:var(--surface-2);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.upload-grid.three{grid-template-columns:1fr 1fr 1fr}
+@media(max-width:768px){.upload-grid,.upload-grid.three{grid-template-columns:1fr}}
+.upload-card{background:var(--surface);border:1.5px dashed var(--border);border-radius:var(--radius);padding:24px 16px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative}
+.upload-card:hover,.upload-card.drag-over{border-color:var(--accent);background:var(--accent-soft)}
+.upload-card input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.upload-icon{width:40px;height:40px;margin:0 auto 10px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.upload-card h3{font-size:14px;font-weight:600;margin-bottom:3px}
+.upload-card .hint{font-size:11px;color:var(--text-dim)}
+.file-list{margin-top:8px}.file-tag{display:inline-flex;align-items:center;gap:5px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:3px 8px;font-size:11px;font-family:var(--font-mono);color:var(--text-dim);margin:2px}
+.run-btn{display:block;width:100%;padding:13px;background:var(--accent);color:#fff;font-family:inherit;font-size:14px;font-weight:600;border:0;border-radius:var(--radius);cursor:pointer;transition:opacity .15s}
+.run-btn:hover{opacity:.88}.run-btn:disabled{opacity:.4;cursor:not-allowed}
+.run-btn.violet{background:var(--violet)}.run-btn.rose{background:var(--rose)}
+.small-btn{padding:4px 10px;font-size:11px;font-weight:500;font-family:inherit;border-radius:5px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);cursor:pointer;transition:color .15s,border-color .15s}
+.small-btn:hover{color:var(--text);border-color:var(--accent)}
+.results{display:none;margin-top:32px}.results.visible{display:block}
+.summary-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.stat{flex:1;min-width:110px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.stat .label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--text-dim);margin-bottom:3px}
+.stat .value{font-size:20px;font-weight:700;font-family:var(--font-mono)}
+.stat.green .value{color:var(--green)}.stat.amber .value{color:var(--amber)}
+.stat.rose .value{color:var(--rose)}.stat.violet .value{color:var(--violet)}
+.stat.cyan .value{color:var(--cyan)}.stat.red .value{color:var(--red)}.stat.accent .value{color:var(--accent)}
+.result-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.panel-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)}
+.panel-header h3{font-size:12px;font-weight:600;display:flex;align-items:center;gap:7px}
+.panel-actions{display:flex;gap:5px}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.dot.amber{background:var(--amber)}.dot.green{background:var(--green)}.dot.violet{background:var(--violet)}.dot.rose{background:var(--rose)}.dot.cyan{background:var(--cyan)}
+.email-list{padding:10px 14px;max-height:320px;overflow-y:auto;font-family:var(--font-mono);font-size:12px;line-height:1.85;color:var(--text-dim);white-space:pre;user-select:all}
+.result-columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:640px){.result-columns{grid-template-columns:1fr}}
+.pw-controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px 20px;margin-bottom:20px}
+.pw-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.pw-field{flex:1;min-width:120px}
+.pw-field label{display:block;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.pw-field input[type="number"]{width:100%;padding:8px 12px;font-family:var(--font-mono);font-size:13px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:7px;outline:0}
+.pw-field input:focus{border-color:var(--violet)}
+.pw-toggle{display:flex;align-items:center;gap:8px;padding-top:20px;cursor:pointer;user-select:none}
+.pw-toggle input{display:none}
+.toggle-track{width:36px;height:20px;background:var(--border);border-radius:10px;position:relative;transition:background .2s;flex-shrink:0}
+.toggle-track::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;background:var(--text);border-radius:50%;transition:transform .2s}
+.pw-toggle input:checked+.toggle-track{background:var(--violet)}
+.pw-toggle input:checked+.toggle-track::after{transform:translateX(16px)}
+.pw-toggle span{font-size:12px;color:var(--text-dim)}
+.filter-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.filter-label{font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px}
+.filter-select,.cash-input{padding:7px 12px;font-family:var(--font-ui);font-size:12px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:7px;outline:0}
+.filter-select{min-width:140px;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%238b95a5'%3E%3Cpath d='M2 3l3 4 3-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;cursor:pointer}
+.filter-select:focus,.cash-input:focus{border-color:var(--rose)}
+.cash-input{width:120px;font-family:var(--font-mono);font-size:13px}
+.orders-table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.table-scroll{overflow:auto;max-height:600px}
+.table-scroll::-webkit-scrollbar{width:6px;height:6px}
+.table-scroll::-webkit-scrollbar-track{background:transparent}
+.table-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+table.dt{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
+table.dt thead{position:sticky;top:0;z-index:2}
+table.dt th{padding:8px 10px;text-align:left;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);background:var(--surface-2);border-bottom:1px solid var(--border)}
+table.dt th.r{text-align:right}
+table.dt td{padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+table.dt tr:last-child td{border-bottom:0}
+table.dt tr:hover td{background:var(--accent-soft)}
+table.dt .mn{font-family:var(--font-mono);font-size:11px}
+table.dt .gr{color:var(--green)}.dt .am{color:var(--amber)}.dt .rd{color:var(--red)}
+.gb{padding:2px 6px;border-radius:3px;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
+.gb.magic{background:#3d8bfd22;color:#3d8bfd}.gb.pokemon{background:#fbbf2422;color:#fbbf24}
+.gb.yugioh{background:#a78bfa22;color:#a78bfa}.gb.onepiece{background:#fb718522;color:#fb7185}
+.gb.gundam{background:#22d3ee22;color:#22d3ee}.gb.other{background:#8b95a522;color:#8b95a5}
+.ti{width:62px;padding:4px 5px;font-family:var(--font-mono);font-size:11px;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:4px;outline:0;text-align:right}
+.ti:focus{border-color:var(--rose)}.ti::placeholder{color:#444}
+.ti.wide{width:75px}.ti.name{width:160px;text-align:left;font-family:var(--font-ui);font-size:11px}
+.pay-tog{padding:2px 7px;border-radius:4px;font-size:9px;font-weight:600;cursor:pointer;border:1px solid var(--border);text-transform:uppercase;letter-spacing:.3px;user-select:none;transition:all .15s}
+.pay-tog.paid{background:var(--green-soft);color:var(--green);border-color:var(--green)}
+.pay-tog.oos{background:var(--amber-soft);color:var(--amber);border-color:var(--amber)}
+.presold-tog{padding:2px 7px;border-radius:4px;font-size:9px;font-weight:600;cursor:pointer;border:1px solid var(--border);text-transform:uppercase;letter-spacing:.3px;user-select:none;transition:all .15s}
+.presold-tog.yes{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.presold-tog.no{background:transparent;color:var(--text-dim);border-color:var(--border)}
+.del-btn{width:22px;height:22px;border-radius:4px;border:1px solid var(--border);background:var(--surface-2);color:var(--red);cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.del-btn:hover{background:var(--red);color:#fff}
+.totals-row td{font-weight:700!important;background:var(--surface-2)!important;border-top:2px solid var(--border)!important}
+.dimmed{opacity:.4}
+.section-hdr{display:flex;align-items:center;gap:10px;margin:32px 0 14px;padding:0 2px}
+.section-hdr h2{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.section-hdr .right{margin-left:auto;display:flex;gap:6px;align-items:center}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:8px 18px;border-radius:7px;font-size:12px;opacity:0;transition:transform .3s,opacity .3s;pointer-events:none;z-index:100}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid #fff4;border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty-msg{padding:20px;text-align:center;color:var(--text-dim);font-size:12px;font-style:italic}
+</style>
+</head>
+<body>
+<div class="app">
+<header><h1>Email <span>Toolkit</span></h1><p>Deduplication, passwords &amp; presale analytics</p></header>
+<div class="tab-bar">
+<button class="tab-btn active" onclick="switchTab('dedup')"><span>&#9993;</span> Dedup</button>
+<button class="tab-btn" onclick="switchTab('pwgen')"><span>&#128272;</span> Passwords</button>
+<button class="tab-btn" onclick="switchTab('orders')"><span>&#128230;</span> Orders</button>
+</div>
+
+<!-- TAB 1 -->
+<div class="tab-panel active" id="tab-dedup">
+<div class="upload-grid">
+<label class="upload-card"><input type="file" id="newFile" accept=".txt,.csv"><div class="upload-icon" style="background:var(--accent-soft);color:var(--accent)">&#9993;</div><h3>New Batch</h3><p class="hint">.txt or .csv</p><div class="file-list" id="newFL"></div></label>
+<label class="upload-card"><input type="file" id="histFiles" accept=".txt,.csv" multiple><div class="upload-icon" style="background:var(--amber-soft);color:var(--amber)">&#128194;</div><h3>History</h3><p class="hint">One or more</p><div class="file-list" id="histFL"></div></label>
+</div>
+<button class="run-btn" id="runBtn" disabled>Run Deduplication</button>
+<div class="results" id="dedupRes">
+<div class="summary-bar">
+<div class="stat accent"><div class="label">Master Set</div><div class="value" id="masterCount">0</div></div>
+<div class="stat amber"><div class="label">Used</div><div class="value" id="usedCount">0</div></div>
+<div class="stat green"><div class="label">Unused</div><div class="value" id="unusedCount">0</div></div>
+</div>
+<div class="result-columns">
+<div class="result-panel"><div class="panel-header"><h3><span class="dot amber"></span> Used</h3><div class="panel-actions"><button class="small-btn" onclick="copyList('used')">Copy</button><button class="small-btn" onclick="downloadList('used')">Download</button></div></div><div class="email-list" id="usedList"></div></div>
+<div class="result-panel"><div class="panel-header"><h3><span class="dot green"></span> Unused</h3><div class="panel-actions"><button class="small-btn" onclick="copyList('unused')">Copy</button><button class="small-btn" onclick="downloadList('unused')">Download</button></div></div><div class="email-list" id="unusedList"></div></div>
+</div></div></div>
+
+<!-- TAB 2 -->
+<div class="tab-panel" id="tab-pwgen">
+<div class="pw-controls"><div class="pw-row">
+<div class="pw-field"><label>How many</label><input type="number" id="pwCount" value="499" min="1" max="10000"></div>
+<div class="pw-field"><label>Length</label><input type="number" id="pwLength" value="12" min="4" max="128"></div>
+<label class="pw-toggle"><input type="checkbox" id="pwSymbols"><span class="toggle-track"></span><span>Symbols</span></label>
+</div></div>
+<button class="run-btn violet" id="pwBtn">Generate Passwords</button>
+<div class="results" id="pwRes">
+<div class="summary-bar"><div class="stat violet"><div class="label">Generated</div><div class="value" id="pwC">0</div></div><div class="stat"><div class="label">Length</div><div class="value" id="pwL" style="color:var(--text)">0</div></div></div>
+<div class="result-panel"><div class="panel-header"><h3><span class="dot violet"></span> Passwords</h3><div class="panel-actions"><button class="small-btn" onclick="copyPW()">Copy</button><button class="small-btn" onclick="downloadPW()">Download</button></div></div><div class="email-list" id="pwList"></div></div>
+</div></div>
+
+<!-- TAB 3 -->
+<div class="tab-panel" id="tab-orders">
+<div class="upload-grid three">
+<label class="upload-card"><input type="file" id="pullFile" accept=".csv"><div class="upload-icon" style="background:var(--rose-soft);color:var(--rose)">&#128203;</div><h3>Pull Sheet</h3><p class="hint">TCGplayer</p><div class="file-list" id="pullFL"></div></label>
+<label class="upload-card"><input type="file" id="shipFile" accept=".csv"><div class="upload-icon" style="background:var(--green-soft);color:var(--green)">&#128666;</div><h3>Shipping Export</h3><p class="hint">TCGplayer</p><div class="file-list" id="shipFL"></div></label>
+<label class="upload-card"><input type="file" id="trackerFile" accept=".csv"><div class="upload-icon" style="background:var(--cyan-soft);color:var(--cyan)">&#128230;</div><h3>Order Tracker</h3><p class="hint">Optional</p><div class="file-list" id="trackerFL"></div></label>
+</div>
+<button class="run-btn rose" id="ordBtn" disabled>Extract &amp; Analyze</button>
+
+<div class="results" id="ordRes">
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+<span class="filter-label">Cash on hand:</span>
+<input class="cash-input" type="number" id="cashOnHand" value="0" min="0" step="100" onchange="recalc()">
+<span class="filter-label" style="margin-left:10px">Platform fee %:</span>
+<input class="cash-input" type="number" id="feeRate" value="13" min="0" max="100" step="0.5" style="width:65px" onchange="recalc()">
+</div>
+<div class="summary-bar">
+<div class="stat green"><div class="label">Net Revenue</div><div class="value" id="sRev">$0</div></div>
+<div class="stat amber"><div class="label">Total COGS</div><div class="value" id="sCogs">$0</div></div>
+<div class="stat green" id="sProfitStat"><div class="label">Profit</div><div class="value" id="sProf">$0</div></div>
+<div class="stat cyan"><div class="label">Cash on Hand</div><div class="value" id="sCash">$0</div></div>
+</div>
+<div class="summary-bar">
+<div class="stat rose"><div class="label">Tied Up (Paid)</div><div class="value" id="sTied">$0</div></div>
+<div class="stat amber"><div class="label">Owed (On Ship)</div><div class="value" id="sOwed">$0</div></div>
+<div class="stat accent"><div class="label">Total Spent</div><div class="value" id="sSpent">$0</div></div>
+<div class="stat violet"><div class="label">Est. CC Points</div><div class="value" id="sPts">0</div></div>
+</div>
+
+<!-- PRESALES TABLE -->
+<div class="section-hdr"><h2><span class="dot rose"></span> Presales (TCGplayer)</h2>
+<div class="right">
+<span class="filter-label">Filter:</span>
+<select class="filter-select" id="fGame" onchange="recalc()"><option value="">All Games</option></select>
+<select class="filter-select" id="fSet" onchange="recalc()"><option value="">All Sets</option></select>
+<input type="month" class="filter-select" id="fMonth" onchange="recalc()" style="min-width:130px">
+<button class="small-btn" onclick="copyTable('presale')">Copy</button>
+</div></div>
+<div class="orders-table-wrap"><div class="table-scroll">
+<table class="dt"><thead><tr>
+<th>Game</th><th>Set</th><th>Product</th><th>Release</th>
+<th class="r">Presold</th><th class="r">Gross</th><th class="r">Fee</th><th class="r">Net</th>
+<th class="r">COGS/U</th><th class="r">COGS Tot</th><th>Paid?</th>
+<th class="r">Hold</th><th class="r">Open</th><th class="r">At Cost</th><th class="r">Sell Qty</th>
+<th class="r">Exp Rev</th><th class="r">Profit</th>
+</tr></thead><tbody id="preBody"></tbody></table>
+</div></div>
+
+<!-- ORDER TRACKER TABLE -->
+<div class="section-hdr"><h2><span class="dot cyan"></span> Order Tracker (Sourcing)</h2>
+<div class="right"><button class="small-btn" onclick="copyTable('tracker')">Copy</button></div></div>
+<div class="orders-table-wrap"><div class="table-scroll">
+<table class="dt"><thead><tr>
+<th style="width:28px"></th><th>Game</th><th>Item</th><th>Retailers</th>
+<th class="r">Qty</th><th class="r">Total Cost</th><th class="r">COGS/U</th><th>Paid?</th>
+<th class="r">Hold</th><th class="r">Open</th><th class="r">At Cost</th><th class="r">Sell Qty</th>
+<th class="r">Exp Rev</th><th class="r">Fee</th><th class="r">Net</th><th class="r">Profit</th><th>In Presold?</th>
+</tr></thead><tbody id="trkBody"></tbody></table>
+</div></div>
+</div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const fmt=n=>'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtS=n=>(n<0?'-':'')+fmt(n);
+const esc=s=>s.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+
+function switchTab(n){['dedup','pwgen','orders'].forEach((t,i)=>{$('tab-'+t).classList.toggle('active',t===n);document.querySelectorAll('.tab-btn')[i].classList.toggle('active',t===n)})}
+
+// Drag/Drop
+document.querySelectorAll('.upload-card').forEach(c=>{c.addEventListener('dragover',e=>{e.preventDefault();c.classList.add('drag-over')});c.addEventListener('dragleave',()=>c.classList.remove('drag-over'));c.addEventListener('drop',e=>{e.preventDefault();c.classList.remove('drag-over');const i=c.querySelector('input[type=file]');i.files=e.dataTransfer.files;i.dispatchEvent(new Event('change'))})});
+
+// ═══ DEDUP ═══
+let nbf=null,hfs=[],dedupData={used:[],unused:[]};
+$('newFile').onchange=function(){nbf=this.files[0]||null;$('newFL').innerHTML=nbf?'<span class="file-tag">'+nbf.name+'</span>':'';$('runBtn').disabled=!(nbf&&hfs.length)};
+$('histFiles').onchange=function(){for(const f of this.files)if(!hfs.some(h=>h.name===f.name))hfs.push(f);$('histFL').innerHTML=hfs.map(f=>'<span class="file-tag">'+f.name+'</span>').join('');$('runBtn').disabled=!(nbf&&hfs.length)};
+$('runBtn').onclick=async()=>{const b=$('runBtn');b.disabled=1;b.innerHTML='<span class="spinner"></span>Processing…';const fd=new FormData;fd.append('new_batch',nbf);hfs.forEach(f=>fd.append('history_files',f));try{const r=await(await fetch('/process',{method:'POST',body:fd})).json();if(r.error){toast(r.error);return}dedupData={used:r.used,unused:r.unused};$('masterCount').textContent=r.master_count;$('usedCount').textContent=r.used.length;$('unusedCount').textContent=r.unused.length;$('usedList').textContent=r.used.join('\n')||'';$('unusedList').textContent=r.unused.join('\n')||'';$('dedupRes').classList.add('visible');$('dedupRes').scrollIntoView({behavior:'smooth'})}catch(e){toast(e.message)}finally{b.disabled=0;b.textContent='Run Deduplication';b.disabled=!(nbf&&hfs.length)}};
+function copyList(k){navigator.clipboard.writeText(dedupData[k].join('\n')).then(()=>toast('Copied '+dedupData[k].length))}
+async function downloadList(k){const r=await fetch('/download/'+k,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emails:dedupData[k]})});const b=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=k+'_emails.txt';a.click();toast('Downloaded')}
+
+// ═══ PASSWORDS ═══
+let gp=[];
+$('pwBtn').onclick=async()=>{const b=$('pwBtn');b.disabled=1;b.innerHTML='<span class="spinner"></span>Generating…';try{const r=await(await fetch('/generate-passwords',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({count:+$('pwCount').value,length:+$('pwLength').value,symbols:$('pwSymbols').checked})})).json();gp=r.passwords;$('pwC').textContent=gp.length;$('pwL').textContent=$('pwLength').value;$('pwList').textContent=gp.join('\n');$('pwRes').classList.add('visible');$('pwRes').scrollIntoView({behavior:'smooth'})}catch(e){toast(e.message)}finally{b.disabled=0;b.textContent='Generate Passwords'}};
+function copyPW(){navigator.clipboard.writeText(gp.join('\n')).then(()=>toast('Copied '+gp.length))}
+async function downloadPW(){const r=await fetch('/download-passwords',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({passwords:gp})});const b=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='passwords.txt';a.click();toast('Downloaded')}
+
+// ═══ ORDERS ═══
+let prods=[], trkItems=[];
+let preState={}, trkState={};
+
+function getPS(name){if(!preState[name])preState[name]={cogs:'',paid:'paid',hold:0,open:0,atcost:0,exprev:'',relOverride:''};return preState[name]}
+function getTS(idx){if(!trkState[idx])trkState[idx]={cogs:'',paid:'paid',hold:0,open:0,atcost:0,exprev:'',inPresold:false,deleted:false,rename:''};return trkState[idx]}
+
+let pf=null,sf=null,tf=null;
+$('pullFile').onchange=function(){pf=this.files[0]||null;$('pullFL').innerHTML=pf?'<span class="file-tag">'+pf.name+'</span>':'';$('ordBtn').disabled=!(pf&&sf)};
+$('shipFile').onchange=function(){sf=this.files[0]||null;$('shipFL').innerHTML=sf?'<span class="file-tag">'+sf.name+'</span>':'';$('ordBtn').disabled=!(pf&&sf)};
+$('trackerFile').onchange=function(){tf=this.files[0]||null;$('trackerFL').innerHTML=tf?'<span class="file-tag">'+tf.name+'</span>':''};
+
+$('ordBtn').onclick=async()=>{
+  const b=$('ordBtn');b.disabled=1;b.innerHTML='<span class="spinner"></span>Extracting…';
+  try{
+    const fd=new FormData;fd.append('pull_sheet',pf);fd.append('shipping_export',sf);
+    const r=await(await fetch('/process-orders',{method:'POST',body:fd})).json();
+    if(r.error){toast(r.error);return}
+    prods=r.products;
+    trkItems=[];trkState={};
+    if(tf){const fd2=new FormData;fd2.append('order_tracker',tf);
+      const r2=await(await fetch('/process-order-tracker',{method:'POST',body:fd2})).json();
+      if(!r2.error)trkItems=r2.groups;
+    }
+    buildFilters();recalc();
+    $('ordRes').classList.add('visible');$('ordRes').scrollIntoView({behavior:'smooth'});
+  }catch(e){toast(e.message)}
+  finally{b.disabled=0;b.textContent='Extract & Analyze';b.disabled=!(pf&&sf)}
+};
+
+function buildFilters(){
+  const gs=[...new Set(prods.map(p=>p.product_line))].sort();
+  const ss=[...new Set(prods.map(p=>p.set).filter(Boolean))].sort();
+  $('fGame').innerHTML='<option value="">All Games</option>'+gs.map(g=>'<option>'+g+'</option>').join('');
+  $('fSet').innerHTML='<option value="">All Sets</option>'+ss.map(s=>'<option>'+s+'</option>').join('');
+}
+
+function badgeCls(g){const l=g.toLowerCase();if(l.includes('magic'))return'magic';if(l.includes('pokemon')||l.includes('pokémon'))return'pokemon';if(l.includes('yugioh')||l.includes('yu-gi-oh'))return'yugioh';if(l.includes('one piece'))return'onepiece';if(l.includes('gundam'))return'gundam';return'other'}
+
+function recalc(){
+  const fee=parseFloat($('feeRate').value)||13;
+  const gv=$('fGame').value, mv=$('fMonth').value;
+  let fp=prods;
+  if(gv){fp=fp.filter(p=>p.product_line===gv);
+    const ss=[...new Set(fp.map(p=>p.set).filter(Boolean))].sort();
+    const fs=$('fSet'),cv=fs.value;fs.innerHTML='<option value="">All Sets</option>'+ss.map(s=>'<option>'+s+'</option>').join('');fs.value=ss.includes(cv)?cv:'';
+  }
+  const sv=$('fSet').value;if(sv)fp=fp.filter(p=>p.set===sv);
+  if(mv)fp=fp.filter(p=>{const rd=getPS(p.product_name).relOverride||p.release_date;return rd&&rd.startsWith(mv)});
+
+  renderPresales(fp,fee);
+  renderTracker(fee);
+  updateSummary(fee);
+}
+
+function renderPresales(list,feeRate){
+  const body=$('preBody');body.innerHTML='';
+  list.forEach(p=>{
+    const s=getPS(p.product_name);
+    const rel=s.relOverride||p.release_date||'';
+    const gross=p.revenue,feAmt=gross*feeRate/100,net=gross-feAmt;
+    const cogs=parseFloat(s.cogs)||0,hold=parseInt(s.hold)||0,open=parseInt(s.open)||0,atcost=parseInt(s.atcost)||0;
+    const sellQty=Math.max(0,p.quantity-hold-open-atcost);
+    const totalCogs=cogs*p.quantity;
+    const exprev=parseFloat(s.exprev)||0;
+    const openLoss=p.quantity>0?(open/p.quantity)*net:0;
+    const sellRev=p.quantity>0?(sellQty/p.quantity)*net:0;
+    const profit=sellRev+exprev-totalCogs-openLoss;
+    const n=esc(p.product_name);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><span class="gb ${badgeCls(p.product_line)}">${p.product_line}</span></td>
+<td style="font-size:10px;color:var(--text-dim);max-width:100px;overflow:hidden;text-overflow:ellipsis">${p.set||'—'}</td>
+<td style="font-weight:500;max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${esc(p.product_name)}">${p.product_name}</td>
+<td><input class="ti wide" type="date" value="${rel}" onchange="getPS('${n}').relOverride=this.value;recalc()"></td>
+<td class="mn am" style="text-align:right">${p.quantity}</td>
+<td class="mn" style="text-align:right">${fmt(gross)}</td>
+<td class="mn rd" style="text-align:right">-${fmt(feAmt)}</td>
+<td class="mn gr" style="text-align:right">${fmt(net)}</td>
+<td style="text-align:right"><input class="ti" type="number" min="0" step="0.01" value="${s.cogs||''}" placeholder="0" onchange="getPS('${n}').cogs=this.value;recalc()"></td>
+<td class="mn" style="text-align:right">${cogs?fmt(totalCogs):'—'}</td>
+<td><span class="pay-tog ${s.paid}" onclick="getPS('${n}').paid=getPS('${n}').paid==='paid'?'oos':'paid';recalc()">${s.paid==='paid'?'Paid':'Ship'}</span></td>
+<td style="text-align:right"><input class="ti" type="number" min="0" value="${hold||''}" placeholder="0" onchange="getPS('${n}').hold=this.value;recalc()"></td>
+<td style="text-align:right"><input class="ti" type="number" min="0" value="${open||''}" placeholder="0" onchange="getPS('${n}').open=this.value;recalc()"></td>
+<td style="text-align:right"><input class="ti" type="number" min="0" value="${atcost||''}" placeholder="0" onchange="getPS('${n}').atcost=this.value;recalc()"></td>
+<td class="mn am" style="text-align:right">${sellQty}</td>
+<td style="text-align:right"><input class="ti" type="number" min="0" step="0.01" value="${s.exprev||''}" placeholder="0" onchange="getPS('${n}').exprev=this.value;recalc()"></td>
+<td class="mn ${cogs?(profit>=0?'gr':'rd'):''}" style="text-align:right">${cogs?fmtS(profit):'—'}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+function renderTracker(feeRate){
+  const body=$('trkBody');body.innerHTML='';
+  trkItems.forEach((g,i)=>{
+    const s=getTS(i);
+    if(s.deleted)return;
+    const name=s.rename||g.item;
+    const qty=g.qty,totalCost=g.total_cost;
+    const cogs=parseFloat(s.cogs)||g.avg_cost;
+    const hold=parseInt(s.hold)||0,open=parseInt(s.open)||0,atcost=parseInt(s.atcost)||0;
+    const sellQty=Math.max(0,qty-hold-open-atcost);
+    const exprev=parseFloat(s.exprev)||0;
+    const feAmt=exprev*feeRate/100;
+    const netRev=exprev-feAmt;
+    const openLoss=qty>0?(open/qty)*totalCost:0; // open = lose COGS value
+    const profit=netRev-totalCost;
+    const cls=s.inPresold?'dimmed':'';
+    const tr=document.createElement('tr');tr.className=cls;
+    tr.innerHTML=`<td><button class="del-btn" onclick="getTS(${i}).deleted=true;recalc()" title="Delete">×</button></td>
+<td><span class="gb ${badgeCls(g.game)}">${g.game}</span></td>
+<td><input class="ti name" type="text" value="${esc(name)}" onchange="getTS(${i}).rename=this.value;recalc()"></td>
+<td style="font-size:10px;color:var(--text-dim)">${g.retailers.join(', ')}</td>
+<td class="mn am" style="text-align:right">${qty}</td>
+<td class="mn" style="text-align:right">${fmt(totalCost)}</td>
+<td style="text-align:right"><input class="ti" type="number" min="0" step="0.01" value="${parseFloat(s.cogs)||''}" placeholder="${g.avg_cost.toFixed(2)}" onchange="getTS(${i}).cogs=this.value;recalc()"></td>
+<td><span class="pay-tog ${s.paid}" onclick="getTS(${i}).paid=getTS(${i}).paid==='paid'?'oos':'paid';recalc()">${s.paid==='paid'?'Paid':'Ship'}</span></td>
+<td style="text-align:right"><input class="ti" type="number" min="0" value="${hold||''}" placeholder="0" onchange="getTS(${i}).hold=this.value;recalc()"></td>
+<td style="text-align:right"><input class="ti" type="number" min="0" value="${open||''}" placeholder="0" onchange="getTS(${i}).open=this.value;recalc()"></td>
+<td style="text-align:right"><input class="ti" type="number" min="0" value="${atcost||''}" placeholder="0" onchange="getTS(${i}).atcost=this.value;recalc()"></td>
+<td class="mn am" style="text-align:right">${sellQty}</td>
+<td style="text-align:right"><input class="ti" type="number" min="0" step="0.01" value="${s.exprev||''}" placeholder="0" onchange="getTS(${i}).exprev=this.value;recalc()"></td>
+<td class="mn rd" style="text-align:right">-${fmt(feAmt)}</td>
+<td class="mn ${netRev>0?'gr':''}" style="text-align:right">${exprev?fmt(netRev):'—'}</td>
+<td class="mn ${exprev?(profit>=0?'gr':'rd'):''}" style="text-align:right">${exprev?fmtS(profit):'—'}</td>
+<td><span class="presold-tog ${s.inPresold?'yes':'no'}" onclick="getTS(${i}).inPresold=!getTS(${i}).inPresold;recalc()">${s.inPresold?'Yes':'No'}</span></td>`;
+    body.appendChild(tr);
+  });
+  if(!trkItems.some((_,i)=>!getTS(i).deleted)){
+    body.innerHTML='<tr><td colspan="17" class="empty-msg">No order tracker data — upload CSV above</td></tr>';
+  }
+}
+
+function updateSummary(feeRate){
+  let tNet=0,tCogs=0,tProfit=0,tTied=0,tOwed=0,tSpent=0;
+  // Presales
+  prods.forEach(p=>{
+    const s=getPS(p.product_name);
+    const net=p.revenue-p.revenue*feeRate/100;
+    const cogs=parseFloat(s.cogs)||0;
+    const hold=parseInt(s.hold)||0,open=parseInt(s.open)||0,atcost=parseInt(s.atcost)||0;
+    const sellQty=Math.max(0,p.quantity-hold-open-atcost);
+    const totalCogs=cogs*p.quantity;
+    const exprev=parseFloat(s.exprev)||0;
+    const openLoss=p.quantity>0?(open/p.quantity)*net:0;
+    const sellRev=p.quantity>0?(sellQty/p.quantity)*net:0;
+    const profit=sellRev+exprev-totalCogs-openLoss;
+    tNet+=net+exprev; tCogs+=totalCogs;
+    if(cogs)tProfit+=profit;
+    if(s.paid==='paid')tTied+=totalCogs;else tOwed+=totalCogs;
+    tSpent+=totalCogs;
+  });
+  // Tracker (exclude inPresold to avoid double-counting)
+  trkItems.forEach((g,i)=>{
+    const s=getTS(i);
+    if(s.deleted||s.inPresold)return;
+    const exprev=parseFloat(s.exprev)||0;
+    const feAmt=exprev*feeRate/100;
+    const netRev=exprev-feAmt;
+    tNet+=netRev; tCogs+=g.total_cost;
+    if(exprev)tProfit+=netRev-g.total_cost;
+    if(s.paid==='paid')tTied+=g.total_cost;else tOwed+=g.total_cost;
+    tSpent+=g.total_cost;
+  });
+  const cash=parseFloat($('cashOnHand').value)||0;
+  $('sRev').textContent=fmt(tNet);$('sCogs').textContent=fmt(tCogs);
+  $('sProf').textContent=fmtS(tProfit);$('sProf').style.color=tProfit>=0?'var(--green)':'var(--red)';
+  $('sCash').textContent=fmt(cash);$('sTied').textContent=fmt(tTied);$('sOwed').textContent=fmt(tOwed);
+  $('sSpent').textContent=fmt(tSpent);$('sPts').textContent=Math.floor(tSpent).toLocaleString();
+}
+
+function copyTable(which){
+  let lines=[];
+  if(which==='presale'){
+    lines.push('Game\tSet\tProduct\tRelease\tPresold\tGross\tFee\tNet\tCOGS/U\tCOGS Tot\tPaid\tHold\tOpen\tAtCost\tSell\tExpRev\tProfit');
+    const fee=parseFloat($('feeRate').value)||13;
+    prods.forEach(p=>{const s=getPS(p.product_name);const cogs=parseFloat(s.cogs)||0;const net=p.revenue-p.revenue*fee/100;const hold=parseInt(s.hold)||0,open=parseInt(s.open)||0,atcost=parseInt(s.atcost)||0;
+      lines.push([p.product_line,p.set,p.product_name,s.relOverride||p.release_date,p.quantity,p.revenue.toFixed(2),(p.revenue*fee/100).toFixed(2),net.toFixed(2),cogs||'',(cogs*p.quantity).toFixed(2),s.paid,hold,open,atcost,Math.max(0,p.quantity-hold-open-atcost),s.exprev||'',''].join('\t'))});
+  }else{
+    lines.push('Game\tItem\tRetailers\tQty\tTotal Cost\tCOGS/U\tPaid\tHold\tOpen\tAtCost\tSell\tExpRev\tInPresold');
+    trkItems.forEach((g,i)=>{const s=getTS(i);if(s.deleted)return;
+      lines.push([g.game,s.rename||g.item,g.retailers.join('; '),g.qty,g.total_cost.toFixed(2),parseFloat(s.cogs)||g.avg_cost,s.paid,s.hold||0,s.open||0,s.atcost||0,Math.max(0,g.qty-(parseInt(s.hold)||0)-(parseInt(s.open)||0)-(parseInt(s.atcost)||0)),s.exprev||'',s.inPresold?'Yes':'No'].join('\t'))});
+  }
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>toast('Copied'));
+}
+
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2400)}
+</script>
+</body>
+</html>
