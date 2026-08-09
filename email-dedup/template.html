@@ -26,7 +26,6 @@ header h1{font-size:30px;font-weight:700;letter-spacing:-.8px;margin-bottom:6px}
 header h1 span{color:var(--accent)}
 header p{color:var(--text-dim);font-size:14px}
 
-/* ── Tabs ── */
 .tabs{display:flex;gap:4px;margin-bottom:24px;border-bottom:1px solid var(--border);padding-bottom:0}
 .tab-btn{background:none;border:none;color:var(--text-dim);font:500 14px var(--font-ui);padding:10px 18px;cursor:pointer;border-bottom:2px solid transparent;transition:.2s}
 .tab-btn:hover{color:var(--text)}
@@ -34,7 +33,6 @@ header p{color:var(--text-dim);font-size:14px}
 .tab-panel{display:none}
 .tab-panel.active{display:block}
 
-/* ── Sub-tabs (for Duplicate Checker) ── */
 .sub-tabs{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
 .sub-tab{background:var(--surface);border:1px solid var(--border);color:var(--text-dim);font:500 13px var(--font-ui);
   padding:7px 16px;border-radius:20px;cursor:pointer;transition:.2s}
@@ -43,24 +41,27 @@ header p{color:var(--text-dim);font-size:14px}
 .sub-panel{display:none}
 .sub-panel.active{display:block}
 
-/* ── Drop zones ── */
 .drop-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
 .drop-grid.single{grid-template-columns:1fr}
-.drop{background:var(--surface);border:1.5px dashed var(--border);border-radius:var(--radius);padding:28px 16px;text-align:center;cursor:pointer;transition:.2s}
+.drop{background:var(--surface);border:1.5px dashed var(--border);border-radius:var(--radius);padding:28px 16px;text-align:center;cursor:pointer;transition:.2s;position:relative}
 .drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
 .drop-icon{width:40px;height:40px;margin:0 auto 10px;border-radius:10px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:18px}
 .drop-label{font-weight:600;font-size:14px;margin-bottom:4px}
 .drop-hint{font-size:12px;color:var(--text-dim)}
 .drop input[type=file]{display:none}
 .file-list{margin-top:8px;font-size:12px;color:var(--green)}
+.file-list .file-item{display:flex;justify-content:space-between;align-items:center;padding:2px 0}
+.file-list .file-remove{color:var(--red);cursor:pointer;font-size:14px;margin-left:8px;border:none;background:none}
+.file-list .file-remove:hover{opacity:.7}
+.clear-btn{background:none;border:1px solid var(--border);color:var(--text-dim);font:500 11px var(--font-ui);
+  padding:3px 10px;border-radius:6px;cursor:pointer;margin-top:6px;transition:.15s}
+.clear-btn:hover{border-color:var(--red);color:var(--red)}
 
-/* ── Action button ── */
 .btn{background:var(--accent);color:#fff;border:none;font:600 14px var(--font-ui);padding:10px 28px;border-radius:8px;cursor:pointer;transition:.15s}
 .btn:hover{filter:brightness(1.15)}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .btn-row{display:flex;gap:12px;align-items:center;margin-bottom:24px}
 
-/* ── Results ── */
 .results{margin-top:24px}
 .summary-bar{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;min-width:130px;flex:1}
@@ -71,7 +72,6 @@ header p{color:var(--text-dim);font-size:14px}
 .stat.accent .value{color:var(--accent)}
 .stat.rose .value{color:var(--rose)}
 
-/* ── File report cards ── */
 .file-report{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
 .file-report h4{font-size:14px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px}
 .file-report .badge{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;text-transform:uppercase}
@@ -86,7 +86,6 @@ header p{color:var(--text-dim);font-size:14px}
 .dupe-list li span.count{color:var(--amber);font-weight:600;margin-left:6px}
 .no-dupes{font-size:13px;color:var(--green);margin-top:6px}
 
-/* ── Email lists ── */
 .email-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px}
 .email-box-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)}
 .email-box-header h3{font-size:14px;font-weight:600}
@@ -94,11 +93,8 @@ header p{color:var(--text-dim);font-size:14px}
 .copy-btn,.dl-btn{background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);font:500 12px var(--font-ui);padding:4px 12px;border-radius:6px;cursor:pointer;transition:.15s}
 .copy-btn:hover,.dl-btn:hover{border-color:var(--accent);color:var(--text)}
 
-/* ── Error display ── */
 .error-msg{background:var(--rose-soft);border:1px solid var(--rose);color:var(--rose);padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px}
-.info-msg{background:var(--accent-soft);border:1px solid var(--accent);color:var(--accent);padding:10px 16px;border-radius:8px;font-size:13px;margin-bottom:16px}
 
-/* ── Password tab ── */
 .pw-controls{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:24px}
 .pw-field label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;font-weight:500}
 .pw-field input[type=number]{background:var(--surface);border:1px solid var(--border);color:var(--text);font:14px var(--font-mono);padding:8px 12px;border-radius:8px;width:80px}
@@ -107,7 +103,6 @@ header p{color:var(--text-dim);font-size:14px}
 .toggle input{accent-color:var(--accent);width:16px;height:16px}
 .pw-list{font-family:var(--font-mono);font-size:13px;line-height:2;color:var(--text-dim)}
 
-/* ── Orders tab (preserved from original) ── */
 .orders-section{margin-bottom:32px}
 .orders-section h3{font-size:16px;font-weight:600;margin-bottom:12px}
 .tbl-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px}
@@ -132,18 +127,14 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
 .toggle-sm:checked::after{left:18px}
 .del-btn{background:none;border:1px solid var(--border);color:var(--red);font-size:14px;padding:2px 8px;border-radius:6px;cursor:pointer}
 .del-btn:hover{background:var(--rose-soft);border-color:var(--red)}
-.summary-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:16px}
 
-/* ── Toast ── */
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface-2);border:1px solid var(--border);color:var(--text);font:500 13px var(--font-ui);padding:10px 24px;border-radius:8px;opacity:0;transition:.3s;pointer-events:none;z-index:999}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-/* ── Scrollbar ── */
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 
-/* ── Responsive ── */
 @media(max-width:640px){
   .drop-grid{grid-template-columns:1fr}
   .summary-bar{flex-direction:column}
@@ -164,9 +155,7 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
     <button class="tab-btn" onclick="switchTab('orders')">Orders</button>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  <!-- TAB 1: DUPLICATE CHECKER                                              -->
-  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- ═══ TAB 1: DUPLICATE CHECKER ═══ -->
   <div id="tab-dedup" class="tab-panel active">
     <div class="sub-tabs">
       <button class="sub-tab active" onclick="switchSub('email')">✉ Emails</button>
@@ -175,23 +164,23 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
       <button class="sub-tab" onclick="switchSub('address')">📍 Addresses</button>
     </div>
 
-    <!-- ── Email Sub-panel ── -->
+    <!-- Email -->
     <div id="sub-email" class="sub-panel active">
       <div class="drop-grid">
-        <label class="drop" id="drop-new" ondragover="ev(event)" ondragleave="lv(event)" ondrop="dp(event,'new-input')">
+        <div class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="addFiles(event,'new_batch')" onclick="pickFiles('new_batch')">
           <div class="drop-icon">📄</div>
           <div class="drop-label">New Batch</div>
-          <div class="drop-hint">iCloud emails to check</div>
-          <input type="file" id="new-input" accept=".txt,.csv" multiple onchange="showFiles(this,'list-new')">
-          <div class="file-list" id="list-new"></div>
-        </label>
-        <label class="drop" id="drop-hist" ondragover="ev(event)" ondragleave="lv(event)" ondrop="dp(event,'hist-input')">
+          <div class="drop-hint">iCloud emails to check · drop multiple files</div>
+          <input type="file" id="picker-new_batch" accept=".txt,.csv" multiple onchange="onPick(this,'new_batch')" style="display:none">
+          <div class="file-list" id="list-new_batch"></div>
+        </div>
+        <div class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="addFiles(event,'history_files')" onclick="pickFiles('history_files')">
           <div class="drop-icon">📚</div>
           <div class="drop-label">History Files</div>
-          <div class="drop-hint">Previously used emails</div>
-          <input type="file" id="hist-input" accept=".txt,.csv" multiple onchange="showFiles(this,'list-hist')">
-          <div class="file-list" id="list-hist"></div>
-        </label>
+          <div class="drop-hint">Previously used emails · drop multiple files</div>
+          <input type="file" id="picker-history_files" accept=".txt,.csv" multiple onchange="onPick(this,'history_files')" style="display:none">
+          <div class="file-list" id="list-history_files"></div>
+        </div>
       </div>
       <div class="btn-row">
         <button class="btn" id="btn-dedup" onclick="runDedup()">Check Duplicates</button>
@@ -199,16 +188,16 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
       <div id="email-results" class="results"></div>
     </div>
 
-    <!-- ── Phone Sub-panel ── -->
+    <!-- Phone -->
     <div id="sub-phone" class="sub-panel">
       <div class="drop-grid single">
-        <label class="drop" id="drop-phone" ondragover="ev(event)" ondragleave="lv(event)" ondrop="dp(event,'phone-input')">
+        <div class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="addFiles(event,'phone_files')" onclick="pickFiles('phone_files')">
           <div class="drop-icon">☎</div>
           <div class="drop-label">Phone Number Files</div>
-          <div class="drop-hint">TXT or CSV — finds US phone patterns (10-digit)</div>
-          <input type="file" id="phone-input" accept=".txt,.csv" multiple onchange="showFiles(this,'list-phone')">
-          <div class="file-list" id="list-phone"></div>
-        </label>
+          <div class="drop-hint">TXT or CSV — drop multiple files</div>
+          <input type="file" id="picker-phone_files" accept=".txt,.csv" multiple onchange="onPick(this,'phone_files')" style="display:none">
+          <div class="file-list" id="list-phone_files"></div>
+        </div>
       </div>
       <div class="btn-row">
         <button class="btn" onclick="runPhoneCheck()">Find Duplicate Phones</button>
@@ -216,16 +205,16 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
       <div id="phone-results" class="results"></div>
     </div>
 
-    <!-- ── Card Sub-panel ── -->
+    <!-- Card -->
     <div id="sub-card" class="sub-panel">
       <div class="drop-grid single">
-        <label class="drop" id="drop-card" ondragover="ev(event)" ondragleave="lv(event)" ondrop="dp(event,'card-input')">
+        <div class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="addFiles(event,'card_files')" onclick="pickFiles('card_files')">
           <div class="drop-icon">💳</div>
           <div class="drop-label">Card Info Files</div>
-          <div class="drop-hint">Finds 13–19 digit card numbers (Luhn-validated)</div>
-          <input type="file" id="card-input" accept=".txt,.csv" multiple onchange="showFiles(this,'list-card')">
-          <div class="file-list" id="list-card"></div>
-        </label>
+          <div class="drop-hint">Finds 13–19 digit card numbers (Luhn-validated) · drop multiple files</div>
+          <input type="file" id="picker-card_files" accept=".txt,.csv" multiple onchange="onPick(this,'card_files')" style="display:none">
+          <div class="file-list" id="list-card_files"></div>
+        </div>
       </div>
       <div class="btn-row">
         <button class="btn" onclick="runCardCheck()">Find Duplicate Cards</button>
@@ -233,16 +222,16 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
       <div id="card-results" class="results"></div>
     </div>
 
-    <!-- ── Address Sub-panel ── -->
+    <!-- Address -->
     <div id="sub-address" class="sub-panel">
       <div class="drop-grid single">
-        <label class="drop" id="drop-addr" ondragover="ev(event)" ondragleave="lv(event)" ondrop="dp(event,'addr-input')">
+        <div class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="addFiles(event,'address_files')" onclick="pickFiles('address_files')">
           <div class="drop-icon">📍</div>
           <div class="drop-label">Address CSV Files</div>
-          <div class="drop-hint">CSV with address columns — matches on Address Line 1 + Line 2</div>
-          <input type="file" id="addr-input" accept=".csv" multiple onchange="showFiles(this,'list-addr')">
-          <div class="file-list" id="list-addr"></div>
-        </label>
+          <div class="drop-hint">Matches on Address Line 1 + Line 2 only (ignores name) · drop multiple</div>
+          <input type="file" id="picker-address_files" accept=".csv" multiple onchange="onPick(this,'address_files')" style="display:none">
+          <div class="file-list" id="list-address_files"></div>
+        </div>
       </div>
       <div class="btn-row">
         <button class="btn" onclick="runAddrCheck()">Find Duplicate Addresses</button>
@@ -251,9 +240,7 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  <!-- TAB 2: PASSWORDS                                                      -->
-  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- ═══ TAB 2: PASSWORDS ═══ -->
   <div id="tab-passwords" class="tab-panel">
     <div class="pw-controls">
       <div class="pw-field"><label>Count</label><input type="number" id="pw-count" value="5" min="1" max="100"></div>
@@ -264,65 +251,123 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
     <div id="pw-out" class="pw-list"></div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  <!-- TAB 3: ORDERS                                                         -->
-  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- ═══ TAB 3: ORDERS ═══ -->
   <div id="tab-orders" class="tab-panel">
-    <!-- Presale upload -->
     <div class="orders-section">
       <h3>TCGplayer Presales</h3>
       <div class="drop-grid">
-        <label class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="dp(event,'ps-input')">
+        <div class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="addFiles(event,'pull_sheet')" onclick="pickFiles('pull_sheet')">
           <div class="drop-icon">📋</div>
           <div class="drop-label">Pull Sheet CSV</div>
-          <input type="file" id="ps-input" accept=".csv" onchange="showFiles(this,'list-ps')">
-          <div class="file-list" id="list-ps"></div>
-        </label>
-        <label class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="dp(event,'se-input')">
+          <input type="file" id="picker-pull_sheet" accept=".csv" onchange="onPick(this,'pull_sheet')" style="display:none">
+          <div class="file-list" id="list-pull_sheet"></div>
+        </div>
+        <div class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="addFiles(event,'shipping_export')" onclick="pickFiles('shipping_export')">
           <div class="drop-icon">📦</div>
           <div class="drop-label">Shipping Export CSV</div>
-          <input type="file" id="se-input" accept=".csv" onchange="showFiles(this,'list-se')">
-          <div class="file-list" id="list-se"></div>
-        </label>
+          <input type="file" id="picker-shipping_export" accept=".csv" onchange="onPick(this,'shipping_export')" style="display:none">
+          <div class="file-list" id="list-shipping_export"></div>
+        </div>
       </div>
-      <div class="btn-row">
-        <button class="btn" onclick="runOrders()">Process Presales</button>
-      </div>
+      <div class="btn-row"><button class="btn" onclick="runOrders()">Process Presales</button></div>
       <div id="presale-results"></div>
     </div>
-    <!-- Order tracker upload -->
     <div class="orders-section">
       <h3>Order Tracker (Sourcing)</h3>
       <div class="drop-grid single">
-        <label class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="dp(event,'trk-input')">
+        <div class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="addFiles(event,'order_tracker')" onclick="pickFiles('order_tracker')">
           <div class="drop-icon">📬</div>
           <div class="drop-label">Order Tracker CSV</div>
-          <input type="file" id="trk-input" accept=".csv" onchange="showFiles(this,'list-trk')">
-          <div class="file-list" id="list-trk"></div>
-        </label>
+          <input type="file" id="picker-order_tracker" accept=".csv" onchange="onPick(this,'order_tracker')" style="display:none">
+          <div class="file-list" id="list-order_tracker"></div>
+        </div>
       </div>
-      <div class="btn-row">
-        <button class="btn" onclick="runTracker()">Process Tracker</button>
-      </div>
+      <div class="btn-row"><button class="btn" onclick="runTracker()">Process Tracker</button></div>
       <div id="tracker-results"></div>
     </div>
-    <!-- Summary cards -->
     <div id="order-summary"></div>
   </div>
-
 </div>
 <div id="toast"></div>
 
 <script>
 const $=id=>document.getElementById(id);
 
-/* ── Tab switching ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   FILE STORE — accumulates files across multiple drops / picks
+   ══════════════════════════════════════════════════════════════════════════ */
+const fileStore = {};  // key → File[]
+
+function getFiles(key){ return fileStore[key] || []; }
+
+function addFiles(event, key){
+  event.preventDefault();
+  event.currentTarget.classList.remove('over');
+  const newFiles = [...event.dataTransfer.files];
+  if(!fileStore[key]) fileStore[key] = [];
+  // Avoid adding same filename twice
+  const existing = new Set(fileStore[key].map(f=>f.name));
+  for(const f of newFiles){
+    if(!existing.has(f.name)){ fileStore[key].push(f); existing.add(f.name); }
+  }
+  renderFileList(key);
+}
+
+function pickFiles(key){
+  const inp = $('picker-'+key);
+  inp.value = '';  // reset so onchange fires even for same files
+  inp.click();
+}
+
+function onPick(inp, key){
+  const newFiles = [...inp.files];
+  if(!fileStore[key]) fileStore[key] = [];
+  const existing = new Set(fileStore[key].map(f=>f.name));
+  for(const f of newFiles){
+    if(!existing.has(f.name)){ fileStore[key].push(f); existing.add(f.name); }
+  }
+  renderFileList(key);
+}
+
+function removeFile(key, idx){
+  fileStore[key].splice(idx, 1);
+  renderFileList(key);
+}
+
+function clearFiles(key){
+  fileStore[key] = [];
+  renderFileList(key);
+}
+
+function renderFileList(key){
+  const el = $('list-'+key);
+  const files = getFiles(key);
+  if(!files.length){ el.innerHTML=''; return; }
+  let html = files.map((f,i)=>
+    `<div class="file-item">
+      <span>✓ ${esc(f.name)}</span>
+      <button class="file-remove" onclick="event.stopPropagation();removeFile('${key}',${i})" title="Remove">✕</button>
+    </div>`
+  ).join('');
+  html += `<button class="clear-btn" onclick="event.stopPropagation();clearFiles('${key}')">Clear all</button>`;
+  el.innerHTML = html;
+}
+
+function buildFormData(keys){
+  const fd = new FormData();
+  for(const key of keys){
+    for(const f of getFiles(key)) fd.append(key, f);
+  }
+  return fd;
+}
+
+/* ── Tabs ── */
 function switchTab(name){
   document.querySelectorAll('.tab-btn').forEach((b,i)=>{
     const panels=['dedup','passwords','orders'];
     const active=panels[i]===name;
     b.classList.toggle('active',active);
-    $(('tab-'+panels[i])).classList.toggle('active',active);
+    $('tab-'+panels[i]).classList.toggle('active',active);
   });
 }
 function switchSub(name){
@@ -334,29 +379,16 @@ function switchSub(name){
   });
 }
 
-/* ── Drag & drop ── */
+/* ── Drag helpers ── */
 function ev(e){e.preventDefault();e.currentTarget.classList.add('over')}
 function lv(e){e.currentTarget.classList.remove('over')}
-function dp(e,inputId){
-  e.preventDefault();e.currentTarget.classList.remove('over');
-  const inp=$(inputId);
-  inp.files=e.dataTransfer.files;
-  const listId=inp.getAttribute('onchange').match(/'([^']+)'/)?.[1];
-  if(listId)showFiles(inp,listId);
-}
-function showFiles(inp,listId){
-  const el=$(listId);
-  el.innerHTML=[...inp.files].map(f=>`✓ ${f.name}`).join('<br>');
-}
 
-/* ── Email Dedup ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   EMAIL DEDUP
+   ══════════════════════════════════════════════════════════════════════════ */
 async function runDedup(){
-  const fd=new FormData();
-  const nf=$('new-input').files;
-  const hf=$('hist-input').files;
-  if(!nf.length){toast('Upload at least one new-batch file');return}
-  for(const f of nf) fd.append('new_batch',f);
-  for(const f of hf) fd.append('history_files',f);
+  if(!getFiles('new_batch').length){toast('Upload at least one new-batch file');return}
+  const fd = buildFormData(['new_batch','history_files']);
 
   $('btn-dedup').disabled=true;
   $('btn-dedup').textContent='Processing…';
@@ -372,15 +404,15 @@ async function runDedup(){
 function renderEmailResults(d){
   let html='';
 
-  // Summary stats
+  // Summary
   html+=`<div class="summary-bar">
-    <div class="stat accent"><div class="label">New Batch</div><div class="value">${d.new_size}</div></div>
+    <div class="stat accent"><div class="label">New Batch (unique)</div><div class="value">${d.new_size}</div></div>
     <div class="stat"><div class="label">Master Set</div><div class="value">${d.master_size}</div></div>
     <div class="stat amber"><div class="label">Used (Dupes)</div><div class="value">${d.used.length}</div></div>
     <div class="stat green"><div class="label">Unused (New)</div><div class="value">${d.unused.length}</div></div>
   </div>`;
 
-  // Per-file reports
+  // Per-file reports with full email lists
   if(d.file_reports&&d.file_reports.length){
     html+='<h3 style="font-size:15px;font-weight:600;margin-bottom:12px">Per-File Analysis</h3>';
     for(const fr of d.file_reports){
@@ -394,6 +426,8 @@ function renderEmailResults(d){
           <span>📧 ${fr.emails_found} unique emails</span>
           <span>🔍 ${fr.total_matches} total matches</span>
         </div>`;
+
+      // Internal dupes
       if(dupeCount>0){
         html+=`<details class="dupe-list"><summary>⚠ ${dupeCount} email${dupeCount>1?'s':''} duplicated within this file</summary><ul>`;
         for(const [email,cnt] of Object.entries(fr.internal_dupes)){
@@ -403,6 +437,18 @@ function renderEmailResults(d){
       }else{
         html+='<div class="no-dupes">✓ No internal duplicates</div>';
       }
+
+      // Full email list (collapsible)
+      if(fr.all_emails&&fr.all_emails.length){
+        html+=`<details class="dupe-list" style="margin-top:6px">
+          <summary style="color:var(--accent)">📋 View all ${fr.all_emails.length} emails in this file</summary>
+          <div style="max-height:200px;overflow-y:auto;margin-top:6px;padding:8px;background:var(--surface-2);border-radius:8px;font-family:var(--font-mono);font-size:11px;line-height:1.7;color:var(--text-dim)">
+            ${fr.all_emails.map(e=>esc(e)).join('<br>')}
+          </div>
+          <button class="copy-btn" style="margin-top:6px" onclick="navigator.clipboard.writeText(${JSON.stringify(fr.all_emails.join('\n'))});toast('Copied')">Copy all</button>
+        </details>`;
+      }
+
       html+='</div>';
     }
   }
@@ -412,7 +458,7 @@ function renderEmailResults(d){
     html+=`<div class="email-box"><div class="email-box-header"><h3 style="color:var(--amber)">Used Emails (${d.used.length})</h3>
       <div style="display:flex;gap:6px">
         <button class="copy-btn" onclick="copyList('used-list')">Copy</button>
-        <a class="dl-btn" href="/download/used?data=${encodeURIComponent(d.used.join('\\n'))}" download>↓</a>
+        <a class="dl-btn" href="/download/used?data=${encodeURIComponent(d.used.join('\n'))}" download>↓</a>
       </div></div>
       <div class="email-box-body" id="used-list">${d.used.join('<br>')}</div></div>`;
   }
@@ -421,21 +467,19 @@ function renderEmailResults(d){
     html+=`<div class="email-box"><div class="email-box-header"><h3 style="color:var(--green)">Unused Emails (${d.unused.length})</h3>
       <div style="display:flex;gap:6px">
         <button class="copy-btn" onclick="copyList('unused-list')">Copy</button>
-        <a class="dl-btn" href="/download/unused?data=${encodeURIComponent(d.unused.join('\\n'))}" download>↓</a>
+        <a class="dl-btn" href="/download/unused?data=${encodeURIComponent(d.unused.join('\n'))}" download>↓</a>
       </div></div>
       <div class="email-box-body" id="unused-list">${d.unused.join('<br>')}</div></div>`;
   }
-
   $('email-results').innerHTML=html;
 }
 
-/* ── Phone Check ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   PHONE CHECK
+   ══════════════════════════════════════════════════════════════════════════ */
 async function runPhoneCheck(){
-  const fd=new FormData();
-  const files=$('phone-input').files;
-  if(!files.length){toast('Upload at least one file');return}
-  for(const f of files) fd.append('phone_files',f);
-
+  if(!getFiles('phone_files').length){toast('Upload at least one file');return}
+  const fd=buildFormData(['phone_files']);
   try{
     const r=await fetch('/check-phones',{method:'POST',body:fd});
     const d=await r.json();
@@ -444,13 +488,12 @@ async function runPhoneCheck(){
   }catch(e){$('phone-results').innerHTML=`<div class="error-msg">${e.message}</div>`}
 }
 
-/* ── Card Check ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   CARD CHECK
+   ══════════════════════════════════════════════════════════════════════════ */
 async function runCardCheck(){
-  const fd=new FormData();
-  const files=$('card-input').files;
-  if(!files.length){toast('Upload at least one file');return}
-  for(const f of files) fd.append('card_files',f);
-
+  if(!getFiles('card_files').length){toast('Upload at least one file');return}
+  const fd=buildFormData(['card_files']);
   try{
     const r=await fetch('/check-cards',{method:'POST',body:fd});
     const d=await r.json();
@@ -459,13 +502,12 @@ async function runCardCheck(){
   }catch(e){$('card-results').innerHTML=`<div class="error-msg">${e.message}</div>`}
 }
 
-/* ── Address Check ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   ADDRESS CHECK
+   ══════════════════════════════════════════════════════════════════════════ */
 async function runAddrCheck(){
-  const fd=new FormData();
-  const files=$('addr-input').files;
-  if(!files.length){toast('Upload at least one CSV');return}
-  for(const f of files) fd.append('address_files',f);
-
+  if(!getFiles('address_files').length){toast('Upload at least one CSV');return}
+  const fd=buildFormData(['address_files']);
   try{
     const r=await fetch('/check-addresses',{method:'POST',body:fd});
     const d=await r.json();
@@ -474,6 +516,7 @@ async function runAddrCheck(){
   }catch(e){$('addr-results').innerHTML=`<div class="error-msg">${e.message}</div>`}
 }
 
+/* ── Shared renderers ── */
 function renderGenericResults(targetId,d,type,label){
   let html='';
   html+=`<div class="summary-bar">
@@ -511,7 +554,6 @@ function renderGenericResults(targetId,d,type,label){
     }
     html+='</ul></div>';
   }
-
   $(targetId).innerHTML=html;
 }
 
@@ -546,7 +588,9 @@ function renderAddrResults(d){
   $('addr-results').innerHTML=html;
 }
 
-/* ── Passwords ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   PASSWORDS
+   ══════════════════════════════════════════════════════════════════════════ */
 async function genPW(){
   const r=await fetch('/generate-passwords',{
     method:'POST',headers:{'Content-Type':'application/json'},
@@ -556,12 +600,12 @@ async function genPW(){
   $('pw-out').innerHTML=d.passwords.map(p=>`<div style="display:flex;align-items:center;gap:8px"><code style="flex:1">${esc(p)}</code><button class="copy-btn" onclick="navigator.clipboard.writeText('${p}');toast('Copied')">Copy</button></div>`).join('');
 }
 
-/* ── Orders (simplified — preserving core logic) ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   ORDERS
+   ══════════════════════════════════════════════════════════════════════════ */
 async function runOrders(){
-  const fd=new FormData();
-  const ps=$('ps-input').files[0], se=$('se-input').files[0];
-  if(!ps||!se){toast('Upload both CSVs');return}
-  fd.append('pull_sheet',ps);fd.append('shipping_export',se);
+  if(!getFiles('pull_sheet').length||!getFiles('shipping_export').length){toast('Upload both CSVs');return}
+  const fd=buildFormData(['pull_sheet','shipping_export']);
   try{
     const r=await fetch('/process-orders',{method:'POST',body:fd});
     const d=await r.json();
@@ -595,8 +639,6 @@ function renderPresaleTable(products){
   });
   html+='</tbody></table></div>';
   $('presale-results').innerHTML=html;
-
-  // Attach listeners for live profit calc
   document.querySelectorAll('#presale-results input').forEach(inp=>{
     inp.addEventListener('input',()=>calcPresaleProfit(inp.closest('tr')));
   });
@@ -614,10 +656,8 @@ function calcPresaleProfit(row){
 }
 
 async function runTracker(){
-  const fd=new FormData();
-  const f=$('trk-input').files[0];
-  if(!f){toast('Upload a tracker CSV');return}
-  fd.append('order_tracker',f);
+  if(!getFiles('order_tracker').length){toast('Upload a tracker CSV');return}
+  const fd=buildFormData(['order_tracker']);
   try{
     const r=await fetch('/process-order-tracker',{method:'POST',body:fd});
     const d=await r.json();

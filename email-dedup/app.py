@@ -24,9 +24,17 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 
 ICLOUD_REGEX = re.compile(r"[a-zA-Z0-9._%+\-]+@icloud\.com", re.IGNORECASE)
+
+# Phone: 10-digit US numbers with optional +1 prefix
+# Uses word boundaries to avoid matching inside longer digit strings (card numbers)
 PHONE_REGEX = re.compile(
-    r"(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}"
+    r"(?<!\d)"                        # not preceded by a digit
+    r"(?:\+?1[-.\s]?)?"               # optional country code
+    r"\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}"
+    r"(?!\d)",                        # not followed by a digit
+    re.MULTILINE
 )
+
 CARD_REGEX = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
 
 
@@ -38,14 +46,6 @@ def normalize_phone(raw: str) -> str:
     if len(digits) == 11 and digits.startswith("1"):
         digits = digits[1:]
     return digits
-
-
-def read_file_lines(file_storage) -> list[str]:
-    """Read uploaded file and return raw lines."""
-    raw = file_storage.read()
-    file_storage.seek(0)
-    text = raw.decode("utf-8", errors="replace")
-    return text.splitlines()
 
 
 # ── Email Logic ──────────────────────────────────────────────────────────────
@@ -97,6 +97,7 @@ def analyze_file_internals(file_storage) -> dict:
         "total_lines": total_lines,
         "emails_found": len(unique_emails),
         "total_matches": len(all_matches),
+        "all_emails": sorted(all_matches),  # full list for display
         "internal_dupes": internal_dupes,
         "unique_emails": unique_emails,
     }
@@ -104,9 +105,31 @@ def analyze_file_internals(file_storage) -> dict:
 
 # ── Phone Logic ──────────────────────────────────────────────────────────────
 
-def extract_phones_from_text(text: str) -> list[str]:
-    raw_matches = PHONE_REGEX.findall(text)
-    return [normalize_phone(m) for m in raw_matches if len(normalize_phone(m)) >= 10]
+def _find_card_digit_spans(text: str) -> set[int]:
+    """Return set of character positions occupied by card numbers."""
+    spans = set()
+    for m in CARD_REGEX.finditer(text):
+        norm = re.sub(r"[\s-]", "", m.group())
+        if 13 <= len(norm) <= 19 and luhn_check(norm):
+            for i in range(m.start(), m.end()):
+                spans.add(i)
+    return spans
+
+
+def extract_phones_from_text(text: str, exclude_card_spans: bool = True) -> list[str]:
+    """Extract phones, skipping any that overlap with card number positions."""
+    card_spans = _find_card_digit_spans(text) if exclude_card_spans else set()
+
+    phones = []
+    for m in PHONE_REGEX.finditer(text):
+        # Skip if this match overlaps with a card number
+        match_positions = set(range(m.start(), m.end()))
+        if match_positions & card_spans:
+            continue
+        norm = normalize_phone(m.group())
+        if len(norm) == 10:
+            phones.append(norm)
+    return phones
 
 
 def analyze_phone_dupes(file_storage) -> dict:
@@ -114,7 +137,26 @@ def analyze_phone_dupes(file_storage) -> dict:
     file_storage.seek(0)
     text = raw.decode("utf-8", errors="replace")
     lines = text.splitlines()
-    all_phones = extract_phones_from_text(text)
+
+    # Try CSV first — dedupe phones within each row (billing + shipping = 1)
+    filename = file_storage.filename.lower()
+    if filename.endswith(".csv"):
+        try:
+            file_storage.seek(0)
+            df = pd.read_csv(file_storage, dtype=str, on_bad_lines="skip")
+            file_storage.seek(0)
+            all_phones = []
+            for _, row in df.iterrows():
+                row_text = " ".join(str(v) for v in row.values if pd.notna(v))
+                row_phones = extract_phones_from_text(row_text)
+                # Dedupe within the row — same phone as billing & shipping counts once
+                unique_in_row = list(dict.fromkeys(row_phones))
+                all_phones.extend(unique_in_row)
+        except Exception:
+            all_phones = extract_phones_from_text(text)
+    else:
+        all_phones = extract_phones_from_text(text)
+
     counts = Counter(all_phones)
     internal_dupes = {p: c for p, c in counts.items() if c > 1}
     return {
@@ -123,6 +165,7 @@ def analyze_phone_dupes(file_storage) -> dict:
         "phones_found": len(set(all_phones)),
         "total_matches": len(all_phones),
         "internal_dupes": internal_dupes,
+        "all_phones": all_phones,
     }
 
 
@@ -134,7 +177,10 @@ def normalize_card(raw: str) -> str:
 
 def luhn_check(number: str) -> bool:
     """Basic Luhn check to filter out false positives."""
-    digits = [int(d) for d in number]
+    try:
+        digits = [int(d) for d in number]
+    except ValueError:
+        return False
     odd_digits = digits[-1::-2]
     even_digits = digits[-2::-2]
     total = sum(odd_digits)
@@ -161,7 +207,7 @@ def analyze_card_dupes(file_storage) -> dict:
     all_cards = extract_cards_from_text(text)
     counts = Counter(all_cards)
     internal_dupes = {c: cnt for c, cnt in counts.items() if cnt > 1}
-    # Mask cards for display: show last 4 only
+    # Mask cards for display
     masked_dupes = {}
     for card, cnt in internal_dupes.items():
         masked = "•" * (len(card) - 4) + card[-4:]
@@ -179,9 +225,8 @@ def analyze_card_dupes(file_storage) -> dict:
 
 def extract_addresses_from_csv(file_storage) -> dict:
     """
-    Look for address columns in a CSV. Matches on columns containing
-    'address', 'line 1', 'line 2', 'street', 'addr'.
-    Returns analysis with internal duplicate addresses.
+    Finds address columns in CSV. Matches ONLY on address line 1 + line 2.
+    Name columns are completely ignored.
     """
     raw = file_storage.read()
     file_storage.seek(0)
@@ -201,21 +246,27 @@ def extract_addresses_from_csv(file_storage) -> dict:
     total_lines = len(text.splitlines())
     cols_lower = {c: c.lower().strip() for c in df.columns}
 
-    # Find address line 1 and line 2 columns
+    # Find address line 1 and line 2 columns (explicitly skip name columns)
     addr1_col = None
     addr2_col = None
-    for orig, low in cols_lower.items():
-        if any(k in low for k in ["address line 1", "address_line_1", "addr1", "address1", "street line 1", "street_1"]):
-            addr1_col = orig
-        elif any(k in low for k in ["address line 2", "address_line_2", "addr2", "address2", "street line 2", "street_2"]):
-            addr2_col = orig
-        elif addr1_col is None and any(k in low for k in ["address", "street", "addr"]):
-            addr1_col = orig
 
+    # First pass: look for explicit "line 1" / "line 2" columns
+    for orig, low in cols_lower.items():
+        if any(k in low for k in ["address line 1", "address_line_1", "addr1",
+                                   "address1", "street line 1", "street_1",
+                                   "shipping address 1", "billing address 1"]):
+            addr1_col = orig
+        elif any(k in low for k in ["address line 2", "address_line_2", "addr2",
+                                     "address2", "street line 2", "street_2",
+                                     "shipping address 2", "billing address 2"]):
+            addr2_col = orig
+
+    # Second pass: fallback to generic "address" / "street" (but never "name")
     if addr1_col is None:
-        # Fallback: try to find any column with "address" in name
         for orig, low in cols_lower.items():
-            if "address" in low or "street" in low:
+            if "name" in low:
+                continue  # skip name columns
+            if any(k in low for k in ["address", "street", "addr"]):
                 addr1_col = orig
                 break
 
@@ -229,7 +280,7 @@ def extract_addresses_from_csv(file_storage) -> dict:
             "columns_found": list(df.columns),
         }
 
-    # Build composite address keys
+    # Build composite keys from address line 1 + line 2 ONLY (no name)
     addresses = []
     for _, row in df.iterrows():
         line1 = str(row.get(addr1_col, "")).strip().lower()
@@ -378,7 +429,6 @@ def process():
     if not new_files or not new_files[0].filename:
         return jsonify(error="Upload at least one new-batch file"), 400
 
-    # ── Analyze each file individually ──
     file_reports = []
 
     # Analyze new batch files
@@ -402,10 +452,9 @@ def process():
 
     used, unused = compare(new_emails_all, master)
 
-    # Strip unique_emails sets from reports (not JSON serializable & not needed)
+    # Clean reports for JSON
     for r in file_reports:
         r.pop("unique_emails", None)
-        # Convert internal_dupes keys to sorted list for consistent display
         r["internal_dupes"] = dict(sorted(r["internal_dupes"].items()))
 
     return jsonify(
@@ -424,24 +473,26 @@ def check_phones():
         return jsonify(error="Upload at least one file"), 400
 
     reports = []
-    all_phones: list[str] = []
+    all_phones_global: list[str] = []
     for f in files:
         report = analyze_phone_dupes(f)
         reports.append(report)
-        all_phones.extend(extract_phones_from_text(
-            f.read().decode("utf-8", errors="replace")
-        ))
+        all_phones_global.extend(report["all_phones"])
         f.seek(0)
 
+    # Strip all_phones from individual reports (not needed in response)
+    for r in reports:
+        r.pop("all_phones", None)
+
     # Cross-file dupes
-    cross_counts = Counter(all_phones)
+    cross_counts = Counter(all_phones_global)
     cross_dupes = {p: c for p, c in cross_counts.items() if c > 1}
 
     return jsonify(
         reports=reports,
         cross_file_dupes=cross_dupes if len(files) > 1 else {},
-        total_unique=len(set(all_phones)),
-        total_found=len(all_phones),
+        total_unique=len(set(all_phones_global)),
+        total_found=len(all_phones_global),
     )
 
 
