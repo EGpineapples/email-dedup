@@ -146,13 +146,14 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
 <div class="app">
   <header>
     <h1>Email <span>Toolkit</span></h1>
-    <p>Dedup · Passwords · Orders</p>
+    <p>Dedup · Passwords · Orders · Extractor</p>
   </header>
 
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('dedup')">Duplicate Checker</button>
     <button class="tab-btn" onclick="switchTab('passwords')">Passwords</button>
     <button class="tab-btn" onclick="switchTab('orders')">Orders</button>
+    <button class="tab-btn" onclick="switchTab('extractor')">Column Extractor</button>
   </div>
 
   <!-- ═══ TAB 1: DUPLICATE CHECKER ═══ -->
@@ -287,6 +288,46 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
     </div>
     <div id="order-summary"></div>
   </div>
+
+  <!-- ═══ TAB 4: COLUMN EXTRACTOR ═══ -->
+  <div id="tab-extractor" class="tab-panel">
+    <div class="drop-grid single">
+      <div class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="addFiles(event,'col_file');setTimeout(autoParseFile,50)" onclick="pickFiles('col_file')">
+        <div class="drop-icon">📊</div>
+        <div class="drop-label">Upload File</div>
+        <div class="drop-hint">CSV, XLSX, or comma-separated TXT</div>
+        <input type="file" id="picker-col_file" accept=".csv,.xlsx,.xls,.txt" onchange="onPick(this,'col_file');autoParseFile()" style="display:none">
+        <div class="file-list" id="list-col_file"></div>
+      </div>
+    </div>
+
+    <div id="col-controls" style="display:none">
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
+        <div>
+          <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;font-weight:500">Column</label>
+          <select id="col-select" onchange="renderColumnValues()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font:14px var(--font-ui);padding:8px 12px;border-radius:8px;min-width:200px;cursor:pointer">
+          </select>
+        </div>
+        <div class="file-meta" id="col-file-meta" style="margin:0"></div>
+      </div>
+    </div>
+
+    <div id="col-output" style="display:none">
+      <div class="email-box">
+        <div class="email-box-header">
+          <h3 id="col-output-title" style="color:var(--accent)">Column Values</h3>
+          <div style="display:flex;gap:6px">
+            <button class="copy-btn" onclick="copyColOutput()">Copy</button>
+          </div>
+        </div>
+        <div class="email-box-body" id="col-output-body" style="max-height:400px"></div>
+      </div>
+      <div class="file-meta" id="col-value-meta" style="margin-top:8px"></div>
+    </div>
+
+    <div id="col-error"></div>
+  </div>
+
 </div>
 <div id="toast"></div>
 
@@ -364,7 +405,7 @@ function buildFormData(keys){
 /* ── Tabs ── */
 function switchTab(name){
   document.querySelectorAll('.tab-btn').forEach((b,i)=>{
-    const panels=['dedup','passwords','orders'];
+    const panels=['dedup','passwords','orders','extractor'];
     const active=panels[i]===name;
     b.classList.toggle('active',active);
     $('tab-'+panels[i]).classList.toggle('active',active);
@@ -683,6 +724,69 @@ function renderTrackerTable(groups){
   });
   html+='</tbody></table></div>';
   $('tracker-results').innerHTML=html;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   COLUMN EXTRACTOR
+   ══════════════════════════════════════════════════════════════════════════ */
+let colData = null; // {columns:[], data:{col:[values]}, total_rows, filename}
+
+async function autoParseFile(){
+  const files = getFiles('col_file');
+  if(!files.length) return;
+  // Only use the last file added
+  const file = files[files.length - 1];
+  const fd = new FormData();
+  fd.append('col_file', file);
+
+  $('col-error').innerHTML = '';
+  $('col-controls').style.display = 'none';
+  $('col-output').style.display = 'none';
+
+  try {
+    const r = await fetch('/extract-columns', {method:'POST', body:fd});
+    const d = await r.json();
+    if(d.error){ $('col-error').innerHTML = `<div class="error-msg">${d.error}</div>`; return; }
+
+    colData = d;
+    // Populate dropdown
+    const sel = $('col-select');
+    sel.innerHTML = d.columns.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+
+    // Show file meta
+    $('col-file-meta').innerHTML = `<span>📄 ${esc(d.filename)}</span><span>📝 ${d.total_rows} rows</span><span>📊 ${d.columns.length} columns</span>`;
+
+    $('col-controls').style.display = 'block';
+    renderColumnValues();
+  } catch(e) {
+    $('col-error').innerHTML = `<div class="error-msg">${e.message}</div>`;
+  }
+}
+
+function renderColumnValues(){
+  if(!colData) return;
+  const col = $('col-select').value;
+  const values = colData.data[col] || [];
+
+  $('col-output-title').textContent = col + ` (${values.length})`;
+
+  // Render one value per line, plain text
+  const body = $('col-output-body');
+  body.textContent = values.join('\n');
+  body.style.whiteSpace = 'pre-wrap';
+
+  // Stats
+  const nonEmpty = values.filter(v => v !== '' && v !== 'nan').length;
+  const unique = new Set(values.filter(v => v !== '' && v !== 'nan')).size;
+  $('col-value-meta').innerHTML = `<span>Total: ${values.length}</span><span>Non-empty: ${nonEmpty}</span><span>Unique: ${unique}</span>`;
+
+  $('col-output').style.display = 'block';
+}
+
+function copyColOutput(){
+  const body = $('col-output-body');
+  if(!body) return;
+  navigator.clipboard.writeText(body.textContent).then(() => toast('Copied to clipboard'));
 }
 
 /* ── Utils ── */

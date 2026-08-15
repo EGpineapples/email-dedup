@@ -4,6 +4,7 @@ Email Toolkit — Flask UI
   Tab 1: Duplicate Checker (emails, phones, cards, addresses)
   Tab 2: Password Generator
   Tab 3: TCGplayer Order Extractor
+  Tab 4: Column Extractor
 Run:  python app.py
 Open: http://localhost:5000
 """
@@ -574,6 +575,43 @@ def order_tracker():
         return jsonify(groups=process_order_tracker(of))
     except Exception as e:
         return jsonify(error=str(e)), 400
+
+
+@app.route("/extract-columns", methods=["POST"])
+def extract_columns():
+    """Parse an uploaded CSV, XLSX, or comma-separated TXT and return columns + all data."""
+    f = request.files.get("col_file")
+    if not f or not f.filename:
+        return jsonify(error="Upload a file"), 400
+
+    filename = f.filename.lower()
+    try:
+        if filename.endswith((".xlsx", ".xls")):
+            df = pd.read_excel(f, dtype=str, engine="openpyxl")
+        elif filename.endswith(".csv"):
+            df = pd.read_csv(f, dtype=str, on_bad_lines="skip")
+        elif filename.endswith(".txt"):
+            raw = f.read().decode("utf-8", errors="replace")
+            df = pd.read_csv(io.StringIO(raw), dtype=str, sep=",", on_bad_lines="skip")
+        else:
+            return jsonify(error="Unsupported file type. Use CSV, XLSX, or TXT."), 400
+    except Exception as e:
+        return jsonify(error=f"Could not parse file: {e}"), 400
+
+    # Build column → values mapping
+    columns = list(df.columns)
+    data = {}
+    for col in columns:
+        values = df[col].fillna("").astype(str).tolist()
+        # Strip whitespace, keep empty strings so row count is accurate
+        data[col] = [v.strip() for v in values]
+
+    return jsonify(
+        filename=f.filename,
+        columns=columns,
+        data=data,
+        total_rows=len(df),
+    )
 
 
 @app.route("/download/<kind>")
