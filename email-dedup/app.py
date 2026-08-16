@@ -614,6 +614,49 @@ def extract_columns():
     )
 
 
+@app.route("/parse-keyvalue", methods=["POST"])
+def parse_keyvalue():
+    """Parse key=value text format. Each line is a record with space-separated Key=Value pairs."""
+    data = request.get_json()
+    text = data.get("text", "").strip()
+    if not text:
+        return jsonify(error="No text provided"), 400
+
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+
+    all_records = []
+    all_keys_ordered = []
+    all_keys_set = set()
+
+    for line in lines:
+        record = {}
+        # Find all =VALUE patterns and derive keys from text between them
+        eq_matches = list(re.finditer(r'=(\S+)', line))
+        for i, m in enumerate(eq_matches):
+            value = m.group(1)
+            eq_pos = m.start()
+            if i == 0:
+                key = line[:eq_pos].strip()
+            else:
+                prev_end = eq_matches[i - 1].end()
+                key = line[prev_end:eq_pos].strip()
+            if key:
+                record[key] = value
+                if key not in all_keys_set:
+                    all_keys_set.add(key)
+                    all_keys_ordered.append(key)
+
+        if record:
+            all_records.append(record)
+
+    return jsonify(
+        records=all_records,
+        keys=all_keys_ordered,
+        total_lines=len(lines),
+        total_records=len(all_records),
+    )
+
+
 @app.route("/download/<kind>")
 def download(kind):
     data = request.args.get("data", "")

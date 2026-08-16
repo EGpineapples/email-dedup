@@ -291,41 +291,132 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
 
   <!-- ═══ TAB 4: COLUMN EXTRACTOR ═══ -->
   <div id="tab-extractor" class="tab-panel">
-    <div class="drop-grid single">
-      <div class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="addFiles(event,'col_file');setTimeout(autoParseFile,50)" onclick="pickFiles('col_file')">
-        <div class="drop-icon">📊</div>
-        <div class="drop-label">Upload File</div>
-        <div class="drop-hint">CSV, XLSX, or comma-separated TXT</div>
-        <input type="file" id="picker-col_file" accept=".csv,.xlsx,.xls,.txt" onchange="onPick(this,'col_file');autoParseFile()" style="display:none">
-        <div class="file-list" id="list-col_file"></div>
-      </div>
+    <div class="sub-tabs">
+      <button class="sub-tab active" onclick="switchExtSub('file')">📊 File Columns</button>
+      <button class="sub-tab" onclick="switchExtSub('kv')">🔑 Key=Value Parser</button>
     </div>
 
-    <div id="col-controls" style="display:none">
-      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
-        <div>
-          <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;font-weight:500">Column</label>
+    <!-- ── File Columns sub-panel ── -->
+    <div id="ext-file" class="sub-panel active">
+      <div class="drop-grid single">
+        <div class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="addFiles(event,'col_file');setTimeout(autoParseFile,50)" onclick="pickFiles('col_file')">
+          <div class="drop-icon">📊</div>
+          <div class="drop-label">Upload File</div>
+          <div class="drop-hint">CSV, XLSX, or comma-separated TXT</div>
+          <input type="file" id="picker-col_file" accept=".csv,.xlsx,.xls,.txt" onchange="onPick(this,'col_file');autoParseFile()" style="display:none">
+          <div class="file-list" id="list-col_file"></div>
+        </div>
+      </div>
+
+      <div id="col-controls" style="display:none">
+        <div class="file-meta" id="col-file-meta" style="margin-bottom:12px"></div>
+
+        <!-- Single column extract -->
+        <div style="margin-bottom:20px">
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Single Column Extract</label>
           <select id="col-select" onchange="renderColumnValues()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font:14px var(--font-ui);padding:8px 12px;border-radius:8px;min-width:200px;cursor:pointer">
           </select>
         </div>
-        <div class="file-meta" id="col-file-meta" style="margin:0"></div>
-      </div>
-    </div>
 
-    <div id="col-output" style="display:none">
-      <div class="email-box">
-        <div class="email-box-header">
-          <h3 id="col-output-title" style="color:var(--accent)">Column Values</h3>
-          <div style="display:flex;gap:6px">
-            <button class="copy-btn" onclick="copyColOutput()">Copy</button>
+        <!-- Multi-column combiner -->
+        <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:12px">
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:8px">Combine Columns</label>
+          <div id="col-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <div>
+              <label style="font-size:12px;color:var(--text-dim);margin-right:4px">Separator</label>
+              <select id="col-sep" onchange="renderCombined()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font:13px var(--font-mono);padding:6px 10px;border-radius:6px">
+                <option value=":">: (colon)</option>
+                <option value=";">; (semicolon)</option>
+                <option value=",">, (comma)</option>
+                <option value="|">| (pipe)</option>
+                <option value="&#9;">⇥ (tab)</option>
+              </select>
+            </div>
+            <button class="btn" style="padding:7px 18px;font-size:13px" onclick="renderCombined()">Combine</button>
           </div>
         </div>
-        <div class="email-box-body" id="col-output-body" style="max-height:400px"></div>
       </div>
-      <div class="file-meta" id="col-value-meta" style="margin-top:8px"></div>
+
+      <!-- Single column output -->
+      <div id="col-output" style="display:none">
+        <div class="email-box">
+          <div class="email-box-header">
+            <h3 id="col-output-title" style="color:var(--accent)">Column Values</h3>
+            <div style="display:flex;gap:6px">
+              <button class="copy-btn" onclick="copyEl('col-output-body')">Copy</button>
+            </div>
+          </div>
+          <div class="email-box-body" id="col-output-body" style="max-height:400px"></div>
+        </div>
+        <div class="file-meta" id="col-value-meta" style="margin-top:8px"></div>
+      </div>
+
+      <!-- Combined output -->
+      <div id="col-combined-output" style="display:none">
+        <div class="email-box">
+          <div class="email-box-header">
+            <h3 id="col-combined-title" style="color:var(--green)">Combined Output</h3>
+            <div style="display:flex;gap:6px">
+              <button class="copy-btn" onclick="copyEl('col-combined-body')">Copy</button>
+            </div>
+          </div>
+          <div class="email-box-body" id="col-combined-body" style="max-height:400px"></div>
+        </div>
+        <div class="file-meta" id="col-combined-meta" style="margin-top:8px"></div>
+      </div>
+
+      <div id="col-error"></div>
     </div>
 
-    <div id="col-error"></div>
+    <!-- ── Key=Value Parser sub-panel ── -->
+    <div id="ext-kv" class="sub-panel">
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Paste Key=Value Data</label>
+        <textarea id="kv-input" placeholder="New PW=abc123 Email=user@icloud.com Old PW=xyz&#10;New PW=def456 Email=other@icloud.com Old PW=xyz" style="width:100%;min-height:120px;background:var(--surface);border:1px solid var(--border);color:var(--text);font:13px var(--font-mono);padding:12px;border-radius:var(--radius);resize:vertical"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn" onclick="parseKV()">Parse</button>
+      </div>
+
+      <div id="kv-controls" style="display:none">
+        <div class="file-meta" id="kv-meta" style="margin-bottom:12px"></div>
+        <label style="display:block;font-size:13px;font-weight:600;margin-bottom:8px">Select Keys to Extract</label>
+        <div id="kv-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+          <div>
+            <label style="font-size:12px;color:var(--text-dim);margin-right:4px">Separator</label>
+            <select id="kv-sep" onchange="renderKVOutput()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font:13px var(--font-mono);padding:6px 10px;border-radius:6px">
+              <option value=":">: (colon)</option>
+              <option value=";">; (semicolon)</option>
+              <option value=",">, (comma)</option>
+              <option value="|">| (pipe)</option>
+              <option value="&#9;">⇥ (tab)</option>
+            </select>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);cursor:pointer">
+            <input type="checkbox" id="kv-exact" checked onchange="renderKVOutput()" style="accent-color:var(--accent)">
+            Exact key match only
+          </label>
+          <button class="btn" style="padding:7px 18px;font-size:13px" onclick="renderKVOutput()">Extract</button>
+        </div>
+      </div>
+
+      <div id="kv-output" style="display:none">
+        <div class="email-box">
+          <div class="email-box-header">
+            <h3 id="kv-output-title" style="color:var(--green)">Extracted Values</h3>
+            <div style="display:flex;gap:6px">
+              <button class="copy-btn" onclick="copyEl('kv-output-body')">Copy</button>
+            </div>
+          </div>
+          <div class="email-box-body" id="kv-output-body" style="max-height:400px"></div>
+        </div>
+        <div class="file-meta" id="kv-output-meta" style="margin-top:8px"></div>
+      </div>
+
+      <div id="kv-error"></div>
+    </div>
   </div>
 
 </div>
@@ -730,11 +821,20 @@ function renderTrackerTable(groups){
    COLUMN EXTRACTOR
    ══════════════════════════════════════════════════════════════════════════ */
 let colData = null; // {columns:[], data:{col:[values]}, total_rows, filename}
+let kvData = null;  // {records:[], keys:[], total_lines, total_records}
 
+function switchExtSub(name){
+  document.querySelectorAll('#tab-extractor .sub-tab').forEach(b=>{
+    b.classList.toggle('active', b.textContent.toLowerCase().includes(name==='file'?'file':'key'));
+  });
+  $('ext-file').classList.toggle('active', name==='file');
+  $('ext-kv').classList.toggle('active', name==='kv');
+}
+
+/* ── File Column Parsing ── */
 async function autoParseFile(){
   const files = getFiles('col_file');
   if(!files.length) return;
-  // Only use the last file added
   const file = files[files.length - 1];
   const fd = new FormData();
   fd.append('col_file', file);
@@ -742,6 +842,7 @@ async function autoParseFile(){
   $('col-error').innerHTML = '';
   $('col-controls').style.display = 'none';
   $('col-output').style.display = 'none';
+  $('col-combined-output').style.display = 'none';
 
   try {
     const r = await fetch('/extract-columns', {method:'POST', body:fd});
@@ -749,11 +850,18 @@ async function autoParseFile(){
     if(d.error){ $('col-error').innerHTML = `<div class="error-msg">${d.error}</div>`; return; }
 
     colData = d;
-    // Populate dropdown
+
+    // Populate single-column dropdown
     const sel = $('col-select');
     sel.innerHTML = d.columns.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
 
-    // Show file meta
+    // Populate multi-column checkboxes
+    $('col-checkboxes').innerHTML = d.columns.map((c,i) =>
+      `<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-dim);cursor:pointer;background:var(--surface);border:1px solid var(--border);padding:4px 10px;border-radius:16px">
+        <input type="checkbox" class="col-cb" value="${esc(c)}" onchange="renderCombined()" style="accent-color:var(--accent);width:14px;height:14px"> ${esc(c)}
+      </label>`
+    ).join('');
+
     $('col-file-meta').innerHTML = `<span>📄 ${esc(d.filename)}</span><span>📝 ${d.total_rows} rows</span><span>📊 ${d.columns.length} columns</span>`;
 
     $('col-controls').style.display = 'block';
@@ -769,24 +877,127 @@ function renderColumnValues(){
   const values = colData.data[col] || [];
 
   $('col-output-title').textContent = col + ` (${values.length})`;
-
-  // Render one value per line, plain text
   const body = $('col-output-body');
   body.textContent = values.join('\n');
   body.style.whiteSpace = 'pre-wrap';
 
-  // Stats
   const nonEmpty = values.filter(v => v !== '' && v !== 'nan').length;
   const unique = new Set(values.filter(v => v !== '' && v !== 'nan')).size;
   $('col-value-meta').innerHTML = `<span>Total: ${values.length}</span><span>Non-empty: ${nonEmpty}</span><span>Unique: ${unique}</span>`;
-
   $('col-output').style.display = 'block';
 }
 
-function copyColOutput(){
-  const body = $('col-output-body');
-  if(!body) return;
-  navigator.clipboard.writeText(body.textContent).then(() => toast('Copied to clipboard'));
+function renderCombined(){
+  if(!colData) return;
+  const checked = [...document.querySelectorAll('.col-cb:checked')].map(cb => cb.value);
+  if(!checked.length){ $('col-combined-output').style.display='none'; return; }
+
+  const sep = $('col-sep').value;
+  const rowCount = colData.total_rows;
+  const lines = [];
+
+  for(let i = 0; i < rowCount; i++){
+    const parts = checked.map(col => {
+      const v = (colData.data[col] || [])[i] || '';
+      return (v === 'nan') ? '' : v;
+    });
+    lines.push(parts.join(sep));
+  }
+
+  $('col-combined-title').textContent = checked.join(` ${sep} `) + ` (${lines.length})`;
+  const body = $('col-combined-body');
+  body.textContent = lines.join('\n');
+  body.style.whiteSpace = 'pre-wrap';
+
+  const nonEmpty = lines.filter(l => l.replace(new RegExp('\\' + sep.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'g'), '').trim()).length;
+  $('col-combined-meta').innerHTML = `<span>Total rows: ${lines.length}</span><span>Non-empty: ${nonEmpty}</span><span>Columns: ${checked.join(', ')}</span>`;
+  $('col-combined-output').style.display = 'block';
+}
+
+/* ── Key=Value Parser ── */
+async function parseKV(){
+  const text = $('kv-input').value.trim();
+  if(!text){ toast('Paste some key=value data first'); return; }
+
+  $('kv-error').innerHTML = '';
+  $('kv-controls').style.display = 'none';
+  $('kv-output').style.display = 'none';
+
+  try {
+    const r = await fetch('/parse-keyvalue', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text})
+    });
+    const d = await r.json();
+    if(d.error){ $('kv-error').innerHTML = `<div class="error-msg">${d.error}</div>`; return; }
+
+    kvData = d;
+    $('kv-meta').innerHTML = `<span>📝 ${d.total_lines} lines</span><span>📋 ${d.total_records} records parsed</span><span>🔑 ${d.keys.length} unique keys</span>`;
+
+    // Build key checkboxes
+    $('kv-checkboxes').innerHTML = d.keys.map(k =>
+      `<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-dim);cursor:pointer;background:var(--surface);border:1px solid var(--border);padding:4px 10px;border-radius:16px">
+        <input type="checkbox" class="kv-cb" value="${esc(k)}" onchange="renderKVOutput()" style="accent-color:var(--accent);width:14px;height:14px"> ${esc(k)}
+      </label>`
+    ).join('');
+
+    $('kv-controls').style.display = 'block';
+  } catch(e) {
+    $('kv-error').innerHTML = `<div class="error-msg">${e.message}</div>`;
+  }
+}
+
+function renderKVOutput(){
+  if(!kvData) return;
+  const checked = [...document.querySelectorAll('.kv-cb:checked')].map(cb => cb.value);
+  if(!checked.length){ $('kv-output').style.display='none'; return; }
+
+  const sep = $('kv-sep').value;
+  const exact = $('kv-exact').checked;
+  const lines = [];
+  let skipped = 0;
+
+  for(const rec of kvData.records){
+    // Check that ALL selected keys exist in this record
+    const allPresent = checked.every(k => {
+      if(exact){
+        // Key must match exactly — "New PW" matches "New PW" but NOT "New PW 1"
+        return rec.hasOwnProperty(k);
+      } else {
+        // Partial match — any key containing the selected key name
+        return Object.keys(rec).some(rk => rk.includes(k));
+      }
+    });
+
+    if(!allPresent){ skipped++; continue; }
+
+    const parts = checked.map(k => {
+      if(exact){
+        return rec[k] || '';
+      } else {
+        const matchKey = Object.keys(rec).find(rk => rk.includes(k));
+        return matchKey ? rec[matchKey] : '';
+      }
+    });
+    lines.push(parts.join(sep));
+  }
+
+  $('kv-output-title').textContent = checked.join(` ${sep} `) + ` (${lines.length})`;
+  const body = $('kv-output-body');
+  body.textContent = lines.join('\n');
+  body.style.whiteSpace = 'pre-wrap';
+
+  let metaHtml = `<span>Matched: ${lines.length}</span>`;
+  if(skipped) metaHtml += `<span style="color:var(--amber)">Skipped: ${skipped} (missing selected key${checked.length>1?'s':''})</span>`;
+  metaHtml += `<span>Keys: ${checked.join(', ')}</span>`;
+  $('kv-output-meta').innerHTML = metaHtml;
+  $('kv-output').style.display = 'block';
+}
+
+function copyEl(id){
+  const el = $(id);
+  if(!el) return;
+  navigator.clipboard.writeText(el.textContent).then(() => toast('Copied to clipboard'));
 }
 
 /* ── Utils ── */
