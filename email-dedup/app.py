@@ -657,6 +657,88 @@ def parse_keyvalue():
     )
 
 
+@app.route("/match-profiles", methods=["POST"])
+def match_profiles():
+    """Match profiles CSV against accounts CSV by email. Return matched profiles as downloadable CSV."""
+    profiles_file = request.files.get("profiles_file")
+    accounts_file = request.files.get("accounts_file")
+
+    if not profiles_file or not profiles_file.filename:
+        return jsonify(error="Upload a profiles file"), 400
+    if not accounts_file or not accounts_file.filename:
+        return jsonify(error="Upload an accounts file"), 400
+
+    def read_df(f):
+        fname = f.filename.lower()
+        if fname.endswith((".xlsx", ".xls")):
+            return pd.read_excel(f, dtype=str, engine="openpyxl")
+        else:
+            return pd.read_csv(f, dtype=str, on_bad_lines="skip")
+
+    try:
+        profiles_df = read_df(profiles_file)
+    except Exception as e:
+        return jsonify(error=f"Could not parse profiles file: {e}"), 400
+
+    try:
+        accounts_df = read_df(accounts_file)
+    except Exception as e:
+        return jsonify(error=f"Could not parse accounts file: {e}"), 400
+
+    # Auto-detect email column in each dataframe
+    def find_email_col(df, label):
+        for col in df.columns:
+            low = col.lower().strip()
+            if "email" in low:
+                return col
+        # Fallback: scan values for anything that looks like an email
+        email_re = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+        for col in df.columns:
+            sample = df[col].dropna().head(20).astype(str)
+            matches = sample.apply(lambda v: bool(email_re.search(v))).sum()
+            if matches >= min(5, len(sample) * 0.5):
+                return col
+        return None
+
+    profiles_email_col = find_email_col(profiles_df, "profiles")
+    accounts_email_col = find_email_col(accounts_df, "accounts")
+
+    if not profiles_email_col:
+        return jsonify(error="Could not find an email column in the profiles file",
+                       columns=list(profiles_df.columns)), 400
+    if not accounts_email_col:
+        return jsonify(error="Could not find an email column in the accounts file",
+                       columns=list(accounts_df.columns)), 400
+
+    # Build set of account emails (lowercased)
+    account_emails = set(
+        accounts_df[accounts_email_col].dropna().str.strip().str.lower()
+    )
+
+    # Match profiles whose email exists in accounts
+    profiles_df["_email_lower"] = profiles_df[profiles_email_col].fillna("").str.strip().str.lower()
+    matched = profiles_df[profiles_df["_email_lower"].isin(account_emails)].drop(columns=["_email_lower"])
+    unmatched = profiles_df[~profiles_df["_email_lower"].isin(account_emails)].drop(columns=["_email_lower"])
+
+    # Build CSV output for matched profiles
+    csv_buf = io.StringIO()
+    matched.to_csv(csv_buf, index=False)
+    csv_text = csv_buf.getvalue()
+
+    return jsonify(
+        profiles_total=len(profiles_df),
+        accounts_total=len(accounts_df),
+        account_emails_unique=len(account_emails),
+        matched_count=len(matched),
+        unmatched_count=len(unmatched),
+        profiles_email_col=profiles_email_col,
+        accounts_email_col=accounts_email_col,
+        matched_csv=csv_text,
+        matched_preview=matched.head(20).values.tolist(),
+        matched_columns=list(matched.columns),
+    )
+
+
 @app.route("/download/<kind>")
 def download(kind):
     data = request.args.get("data", "")

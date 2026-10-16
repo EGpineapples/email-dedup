@@ -163,6 +163,7 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
       <button class="sub-tab" onclick="switchSub('phone')">☎ Phone Numbers</button>
       <button class="sub-tab" onclick="switchSub('card')">💳 Card Numbers</button>
       <button class="sub-tab" onclick="switchSub('address')">📍 Addresses</button>
+      <button class="sub-tab" onclick="switchSub('profiles')">🔗 Profile Matcher</button>
     </div>
 
     <!-- Email -->
@@ -238,6 +239,30 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
         <button class="btn" onclick="runAddrCheck()">Find Duplicate Addresses</button>
       </div>
       <div id="addr-results" class="results"></div>
+    </div>
+
+    <!-- Profile Matcher -->
+    <div id="sub-profiles" class="sub-panel">
+      <div class="drop-grid">
+        <div class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="addFiles(event,'profiles_file')" onclick="pickFiles('profiles_file')">
+          <div class="drop-icon">👤</div>
+          <div class="drop-label">Profiles CSV</div>
+          <div class="drop-hint">Profiles to match — CSV or XLSX</div>
+          <input type="file" id="picker-profiles_file" accept=".csv,.xlsx,.xls" onchange="onPick(this,'profiles_file')" style="display:none">
+          <div class="file-list" id="list-profiles_file"></div>
+        </div>
+        <div class="drop" ondragover="ev(event)" ondragleave="lv(event)" ondrop="addFiles(event,'accounts_file')" onclick="pickFiles('accounts_file')">
+          <div class="drop-icon">📋</div>
+          <div class="drop-label">Accounts CSV</div>
+          <div class="drop-hint">Accounts to match against — CSV or XLSX</div>
+          <input type="file" id="picker-accounts_file" accept=".csv,.xlsx,.xls" onchange="onPick(this,'accounts_file')" style="display:none">
+          <div class="file-list" id="list-accounts_file"></div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="btn-profiles" onclick="runProfileMatch()">Match Profiles</button>
+      </div>
+      <div id="profile-results" class="results"></div>
     </div>
   </div>
 
@@ -503,11 +528,13 @@ function switchTab(name){
   });
 }
 function switchSub(name){
-  document.querySelectorAll('.sub-tab').forEach(b=>{
-    b.classList.toggle('active',b.textContent.toLowerCase().includes(name));
+  document.querySelectorAll('#tab-dedup > .sub-tabs .sub-tab').forEach(b=>{
+    const map={email:'email',phone:'phone',card:'card',address:'address',profiles:'profile matcher'};
+    b.classList.toggle('active',b.textContent.toLowerCase().includes(map[name]||name));
   });
-  document.querySelectorAll('.sub-panel').forEach(p=>{
-    p.classList.toggle('active',p.id==='sub-'+name);
+  ['email','phone','card','address','profiles'].forEach(k=>{
+    const el=$('sub-'+k);
+    if(el) el.classList.toggle('active',k===name);
   });
 }
 
@@ -992,6 +1019,96 @@ function renderKVOutput(){
   metaHtml += `<span>Keys: ${checked.join(', ')}</span>`;
   $('kv-output-meta').innerHTML = metaHtml;
   $('kv-output').style.display = 'block';
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PROFILE MATCHER
+   ══════════════════════════════════════════════════════════════════════════ */
+let matchedCSV = null;
+
+async function runProfileMatch(){
+  if(!getFiles('profiles_file').length){toast('Upload a profiles file');return}
+  if(!getFiles('accounts_file').length){toast('Upload an accounts file');return}
+
+  const fd = new FormData();
+  const pf = getFiles('profiles_file');
+  const af = getFiles('accounts_file');
+  fd.append('profiles_file', pf[pf.length-1]);
+  fd.append('accounts_file', af[af.length-1]);
+
+  $('btn-profiles').disabled=true;
+  $('btn-profiles').textContent='Matching…';
+  try{
+    const r=await fetch('/match-profiles',{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.error){
+      let msg=d.error;
+      if(d.columns) msg+=`<br><span style="font-size:11px;color:var(--text-dim)">Columns found: ${d.columns.map(c=>esc(c)).join(', ')}</span>`;
+      $('profile-results').innerHTML=`<div class="error-msg">${msg}</div>`;
+      return;
+    }
+    matchedCSV = d.matched_csv;
+    renderProfileResults(d);
+  }catch(e){$('profile-results').innerHTML=`<div class="error-msg">${e.message}</div>`}
+  finally{$('btn-profiles').disabled=false;$('btn-profiles').textContent='Match Profiles'}
+}
+
+function renderProfileResults(d){
+  let html=`<div class="summary-bar">
+    <div class="stat accent"><div class="label">Profiles</div><div class="value">${d.profiles_total}</div></div>
+    <div class="stat"><div class="label">Accounts</div><div class="value">${d.accounts_total}</div></div>
+    <div class="stat green"><div class="label">Matched</div><div class="value">${d.matched_count}</div></div>
+    <div class="stat rose"><div class="label">No Account</div><div class="value">${d.unmatched_count}</div></div>
+  </div>`;
+
+  html+=`<div class="file-meta" style="margin-bottom:16px">
+    <span>Profiles email column: <b>${esc(d.profiles_email_col)}</b></span>
+    <span>Accounts email column: <b>${esc(d.accounts_email_col)}</b></span>
+    <span>Unique account emails: <b>${d.account_emails_unique}</b></span>
+  </div>`;
+
+  if(d.matched_count>0){
+    html+=`<div style="margin-bottom:16px">
+      <button class="btn" onclick="downloadMatchedCSV()">⬇ Download Matched Profiles CSV</button>
+    </div>`;
+
+    // Preview table
+    html+=`<div class="tbl-wrap"><table class="data"><thead><tr>`;
+    for(const col of d.matched_columns){
+      html+=`<th>${esc(col)}</th>`;
+    }
+    html+=`</tr></thead><tbody>`;
+    const preview = d.matched_preview || [];
+    for(const row of preview){
+      html+='<tr>';
+      for(const val of row){
+        html+=`<td>${esc(String(val==='nan'?'':val||''))}</td>`;
+      }
+      html+='</tr>';
+    }
+    if(d.matched_count>20){
+      html+=`<tr><td colspan="${d.matched_columns.length}" style="text-align:center;color:var(--text-dim);font-style:italic">
+        … and ${d.matched_count-20} more rows (download CSV for full data)
+      </td></tr>`;
+    }
+    html+=`</tbody></table></div>`;
+  }else{
+    html+=`<div class="no-dupes" style="margin-top:12px">No matching profiles found — none of the profile emails exist in the accounts file.</div>`;
+  }
+
+  $('profile-results').innerHTML=html;
+}
+
+function downloadMatchedCSV(){
+  if(!matchedCSV) return;
+  const blob = new Blob([matchedCSV], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'matched_profiles.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Downloading matched_profiles.csv');
 }
 
 function copyEl(id){
