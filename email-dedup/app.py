@@ -725,16 +725,19 @@ def match_profiles():
     matched.to_csv(csv_buf, index=False)
     csv_text = csv_buf.getvalue()
 
+    # Clean NaN values for JSON serialization
+    preview = matched.head(20).fillna("").values.tolist()
+
     return jsonify(
-        profiles_total=len(profiles_df),
-        accounts_total=len(accounts_df),
+        profiles_total=int(len(profiles_df)),
+        accounts_total=int(len(accounts_df)),
         account_emails_unique=len(account_emails),
-        matched_count=len(matched),
-        unmatched_count=len(unmatched),
+        matched_count=int(len(matched)),
+        unmatched_count=int(len(unmatched)),
         profiles_email_col=profiles_email_col,
         accounts_email_col=accounts_email_col,
         matched_csv=csv_text,
-        matched_preview=matched.head(20).values.tolist(),
+        matched_preview=preview,
         matched_columns=list(matched.columns),
     )
 
