@@ -728,6 +728,92 @@ def match_profiles():
     # Clean NaN values for JSON serialization
     preview = matched.head(20).fillna("").values.tolist()
 
+    # ── Duplicate checks within matched profiles ──
+    dupes_found = {}
+    cols_lower = {c: c.lower().strip() for c in matched.columns}
+
+    # 1) Duplicate emails
+    email_col_m = None
+    for orig, low in cols_lower.items():
+        if "email" in low:
+            email_col_m = orig
+            break
+    if email_col_m:
+        vals = matched[email_col_m].fillna("").str.strip().str.lower()
+        vals = vals[vals != ""]
+        counts = vals.value_counts()
+        email_dupes = {v: int(c) for v, c in counts.items() if c > 1}
+        if email_dupes:
+            dupes_found["email"] = {"column": email_col_m, "dupes": email_dupes}
+
+    # 2) Duplicate phone numbers
+    phone_col_m = None
+    for orig, low in cols_lower.items():
+        if any(k in low for k in ["phone", "phone_num", "phone_number", "telephone", "mobile", "cell"]):
+            phone_col_m = orig
+            break
+    if phone_col_m:
+        vals = matched[phone_col_m].fillna("").astype(str).apply(
+            lambda v: normalize_phone(v) if v.strip() else ""
+        )
+        vals = vals[vals.str.len() == 10]
+        counts = vals.value_counts()
+        phone_dupes = {v: int(c) for v, c in counts.items() if c > 1}
+        if phone_dupes:
+            dupes_found["phone"] = {"column": phone_col_m, "dupes": phone_dupes}
+
+    # 3) Duplicate card numbers
+    cc_col_m = None
+    for orig, low in cols_lower.items():
+        if any(k in low for k in ["cc_number", "card_number", "card_num", "cc_num",
+                                   "credit_card", "card", "cc", "payment_card"]):
+            cc_col_m = orig
+            break
+    if cc_col_m:
+        vals = matched[cc_col_m].fillna("").astype(str).apply(
+            lambda v: re.sub(r"[\s-]", "", v)
+        )
+        vals = vals[vals.str.len() >= 4]  # must have something
+        counts = vals.value_counts()
+        cc_dupes = {}
+        for v, c in counts.items():
+            if c > 1:
+                masked = "•" * max(0, len(v) - 4) + v[-4:]
+                cc_dupes[masked] = int(c)
+        if cc_dupes:
+            dupes_found["card"] = {"column": cc_col_m, "dupes": cc_dupes}
+
+    # 4) Duplicate shipping addresses (shipping_street + shipping_street_2)
+    ship1_col = None
+    ship2_col = None
+    for orig, low in cols_lower.items():
+        if any(k in low for k in ["shipping_street_2", "shipping_address_2",
+                                   "shipping_street2", "ship_street_2"]):
+            ship2_col = orig
+        elif any(k in low for k in ["shipping_street", "shipping_address",
+                                     "ship_street", "shipping_street_1",
+                                     "shipping_address_1"]):
+            ship1_col = orig
+    if ship1_col:
+        addr_keys = []
+        for _, row in matched.iterrows():
+            line1 = str(row.get(ship1_col, "")).strip().lower()
+            line2 = str(row.get(ship2_col, "")).strip().lower() if ship2_col else ""
+            if line1 and line1 != "nan":
+                key = f"{line1}|{line2}" if line2 and line2 != "nan" else line1
+                addr_keys.append(key)
+        counts = Counter(addr_keys)
+        addr_dupes = {}
+        for addr, cnt in counts.items():
+            if cnt > 1:
+                display = addr.replace("|", " + ") if "|" in addr else addr
+                addr_dupes[display] = cnt
+        if addr_dupes:
+            dupes_found["address"] = {
+                "column": ship1_col + (f" + {ship2_col}" if ship2_col else ""),
+                "dupes": addr_dupes,
+            }
+
     return jsonify(
         profiles_total=int(len(profiles_df)),
         accounts_total=int(len(accounts_df)),
@@ -739,6 +825,7 @@ def match_profiles():
         matched_csv=csv_text,
         matched_preview=preview,
         matched_columns=list(matched.columns),
+        dupes_found=dupes_found,
     )
 
 

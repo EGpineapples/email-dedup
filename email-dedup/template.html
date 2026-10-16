@@ -1096,6 +1096,25 @@ function renderProfileResults(d){
     html+=`<div class="no-dupes" style="margin-top:12px">No matching profiles found — none of the profile emails exist in the accounts file.</div>`;
   }
 
+  // Duplicate checks within matched profiles
+  if(d.dupes_found && Object.keys(d.dupes_found).length > 0){
+    html+=`<h3 style="font-size:15px;font-weight:600;margin:20px 0 12px;color:var(--amber)">⚠ Duplicates in Matched Profiles</h3>`;
+    const labels = {email:'📧 Email',phone:'☎ Phone',card:'💳 Card',address:'📍 Shipping Address'};
+    for(const [type, info] of Object.entries(d.dupes_found)){
+      const dupeCount = Object.keys(info.dupes).length;
+      html+=`<div class="file-report" style="border-color:var(--amber)">
+        <h4 style="color:var(--amber)">${labels[type]||type} Duplicates</h4>
+        <div class="file-meta"><span>Column: <b>${esc(info.column)}</b></span><span>${dupeCount} duplicate value${dupeCount>1?'s':''}</span></div>
+        <details class="dupe-list" open><summary style="color:var(--amber)">⚠ ${dupeCount} duplicated value${dupeCount>1?'s':''}</summary><ul>`;
+      for(const [val,cnt] of Object.entries(info.dupes)){
+        html+=`<li>${esc(val)} <span class="count">×${cnt}</span></li>`;
+      }
+      html+=`</ul></details></div>`;
+    }
+  } else if(d.matched_count > 0){
+    html+=`<div class="no-dupes" style="margin-top:16px">✓ No duplicate emails, phones, cards, or shipping addresses found in matched profiles</div>`;
+  }
+
   $('profile-results').innerHTML=html;
 }
 
