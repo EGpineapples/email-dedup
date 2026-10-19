@@ -154,6 +154,7 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
     <button class="tab-btn" onclick="switchTab('passwords')">Passwords</button>
     <button class="tab-btn" onclick="switchTab('orders')">Orders</button>
     <button class="tab-btn" onclick="switchTab('extractor')">Column Extractor</button>
+    <button class="tab-btn" onclick="switchTab('addresslab')">Address Lab</button>
   </div>
 
   <!-- ═══ TAB 1: DUPLICATE CHECKER ═══ -->
@@ -444,6 +445,120 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
     </div>
   </div>
 
+  <!-- ═══ TAB 5: ADDRESS LAB ═══ -->
+  <div id="tab-addresslab" class="tab-panel">
+    <div class="sub-tabs">
+      <button class="sub-tab active" onclick="switchAddrLab('usps')">📬 USPS Suffix Checker</button>
+      <button class="sub-tab" onclick="switchAddrLab('analytics')">📊 Discord Analytics</button>
+      <button class="sub-tab" onclick="switchAddrLab('suggest')">💡 Address Suggestions</button>
+      <button class="sub-tab" onclick="switchAddrLab('generate')">🔧 Address Generator</button>
+    </div>
+
+    <!-- ── USPS Suffix Checker ── -->
+    <div id="alab-usps" class="sub-panel active">
+      <div class="card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+        <h3 style="font-size:16px;margin-bottom:12px">USPS Street Suffix Checker</h3>
+        <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Enter an address to find all official USPS suffix alternatives, similar-sounding and similar-spelled suffixes.</p>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="usps-input" placeholder="e.g. 123 Main Street" style="flex:1;min-width:250px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font:14px var(--font-ui);outline:none"
+            onkeydown="if(event.key==='Enter')runUspsCheck()">
+          <button class="btn" onclick="runUspsCheck()">Check Suffix</button>
+        </div>
+      </div>
+      <div id="usps-results"></div>
+    </div>
+
+    <!-- ── Discord Analytics ── -->
+    <div id="alab-analytics" class="sub-panel">
+      <div class="card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+        <h3 style="font-size:16px;margin-bottom:12px">Discord Webhook Analytics</h3>
+        <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Track declined/checked profiles from Discord webhook channels. Requires <code>valor.json</code> and a Discord bot token.</p>
+
+        <div id="discord-info" style="margin-bottom:16px"></div>
+
+        <!-- Channel Management -->
+        <div style="margin-bottom:16px">
+          <h4 style="font-size:14px;margin-bottom:8px">Channels</h4>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <input type="text" id="ch-id" placeholder="Channel ID" style="width:180px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font:13px var(--font-ui);outline:none">
+            <input type="text" id="ch-name" placeholder="Name (optional)" style="width:160px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font:13px var(--font-ui);outline:none">
+            <button class="btn" style="padding:8px 16px;font-size:13px" onclick="addChannel()">Add</button>
+          </div>
+          <div id="channel-list" style="font-size:13px"></div>
+        </div>
+
+        <!-- Scrape Control -->
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+          <select id="scrape-channel" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font:13px var(--font-ui)">
+            <option value="">Select channel to scrape...</option>
+          </select>
+          <button class="btn" style="padding:8px 16px;font-size:13px" onclick="startScrape()">Scrape Channel</button>
+          <button class="btn" style="padding:8px 16px;font-size:13px;background:var(--surface);border:1px solid var(--border);color:var(--text)" onclick="refreshDiscord()">Refresh Data</button>
+        </div>
+        <div id="scrape-status" style="font-size:13px;color:var(--text-dim)"></div>
+      </div>
+
+      <!-- Analytics Section -->
+      <div class="card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+        <h4 style="font-size:14px;margin-bottom:12px">Profile Lookup</h4>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+          <input type="text" id="discord-lookup" placeholder="Search profile name..." style="flex:1;min-width:200px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font:13px var(--font-ui);outline:none"
+            onkeydown="if(event.key==='Enter')runDiscordLookup()">
+          <button class="btn" style="padding:8px 16px;font-size:13px" onclick="runDiscordLookup()">Search</button>
+        </div>
+        <div id="discord-lookup-results"></div>
+      </div>
+
+      <div class="card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+        <h4 style="font-size:14px;margin-bottom:12px">Breakdown</h4>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+          <select id="discord-group" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font:13px var(--font-ui)">
+            <option>Profile</option><option>Card Type</option><option>Zip Code</option>
+            <option>State</option><option>Address</option><option>Type + Zip</option><option>Site</option>
+          </select>
+          <label style="font-size:13px;color:var(--text-dim)">Min events:
+            <input type="number" id="discord-min" value="1" min="1" style="width:60px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font:13px var(--font-ui);outline:none">
+          </label>
+          <button class="btn" style="padding:8px 16px;font-size:13px" onclick="runDiscordBreakdown()">Breakdown</button>
+          <button class="btn" style="padding:8px 16px;font-size:13px;background:var(--surface);border:1px solid var(--border);color:var(--text)" onclick="exportDiscord()">Export CSV</button>
+        </div>
+        <div id="discord-breakdown-results"></div>
+      </div>
+    </div>
+
+    <!-- ── Address Suggestions ── -->
+    <div id="alab-suggest" class="sub-panel">
+      <div class="card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+        <h3 style="font-size:16px;margin-bottom:12px">Address Suggestion System</h3>
+        <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Enter a declined address to get alternative forms based on USPS data and checkout analytics.</p>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="suggest-input" placeholder="e.g. 456 Oak Drive" style="flex:1;min-width:250px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font:14px var(--font-ui);outline:none"
+            onkeydown="if(event.key==='Enter')runAddressSuggest()">
+          <button class="btn" onclick="runAddressSuggest()">Get Suggestions</button>
+        </div>
+      </div>
+      <div id="suggest-results"></div>
+    </div>
+
+    <!-- ── Address Generator ── -->
+    <div id="alab-generate" class="sub-panel">
+      <div class="card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+        <h3 style="font-size:16px;margin-bottom:12px">New Address Generator</h3>
+        <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Generate brand new address variations using USPS suffixes, misspellings, and creative combinations. Enter the street base <strong>without</strong> the suffix.</p>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="gen-base" placeholder="e.g. 789 Elm" style="flex:1;min-width:250px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font:14px var(--font-ui);outline:none"
+            onkeydown="if(event.key==='Enter')runAddressGenerate()">
+          <button class="btn" onclick="runAddressGenerate()">Generate</button>
+        </div>
+        <div style="margin-top:10px">
+          <label style="font-size:13px;color:var(--text-dim)">Exclude these addresses (one per line):</label>
+          <textarea id="gen-exclude" rows="3" style="display:block;width:100%;margin-top:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font:13px var(--font-mono);outline:none;resize:vertical" placeholder="Optional — paste addresses to exclude"></textarea>
+        </div>
+      </div>
+      <div id="gen-results"></div>
+    </div>
+  </div>
+
 </div>
 <div id="toast"></div>
 
@@ -521,10 +636,21 @@ function buildFormData(keys){
 /* ── Tabs ── */
 function switchTab(name){
   document.querySelectorAll('.tab-btn').forEach((b,i)=>{
-    const panels=['dedup','passwords','orders','extractor'];
+    const panels=['dedup','passwords','orders','extractor','addresslab'];
     const active=panels[i]===name;
     b.classList.toggle('active',active);
     $('tab-'+panels[i]).classList.toggle('active',active);
+  });
+  if(name==='addresslab') loadDiscordInfo();
+}
+function switchAddrLab(name){
+  document.querySelectorAll('#tab-addresslab > .sub-tabs .sub-tab').forEach(b=>{
+    const map={usps:'usps',analytics:'analytics',suggest:'suggest',generate:'generator'};
+    b.classList.toggle('active',b.textContent.toLowerCase().includes(map[name]||name));
+  });
+  ['usps','analytics','suggest','generate'].forEach(k=>{
+    const el=$('alab-'+k);
+    if(el) el.classList.toggle('active',k===name);
   });
 }
 function switchSub(name){
@@ -1147,6 +1273,264 @@ function esc(s){
   const d=document.createElement('div');d.textContent=s;return d.innerHTML;
 }
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2400)}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ADDRESS LAB
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── USPS Suffix Checker ── */
+async function runUspsCheck(){
+  const addr=$('usps-input').value.trim();
+  if(!addr){toast('Enter an address');return}
+  const el=$('usps-results');
+  el.innerHTML='<p style="color:var(--text-dim)">Checking...</p>';
+  try{
+    const r=await fetch('/api/usps-check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr})});
+    const d=await r.json();
+    if(d.error){
+      el.innerHTML=`<div class="file-report"><p style="color:var(--amber)">${esc(d.error)}</p></div>`;
+      return;
+    }
+    let html=`<div class="summary-bar">
+      <div class="stat accent"><div class="label">Detected Suffix</div><div class="value">${esc(d.detected_suffix)}</div></div>
+      <div class="stat green"><div class="label">Primary Name</div><div class="value">${esc(d.primary_name)}</div></div>
+      <div class="stat amber"><div class="label">Standard Abbr</div><div class="value">${esc(d.standard_abbr)}</div></div>
+      <div class="stat"><div class="label">Alternatives</div><div class="value">${d.alternatives.length}</div></div>
+    </div>`;
+
+    if(d.alternatives.length){
+      html+=`<div class="file-report"><h4>Official USPS Alternatives</h4>
+        <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <tr style="color:var(--text-dim)"><th style="text-align:left;padding:6px 8px">Form</th><th style="text-align:left;padding:6px 8px">Full Address</th><th style="text-align:left;padding:6px 8px">Note</th></tr>`;
+      for(const a of d.alternatives){
+        html+=`<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;font-family:var(--font-mono)">${esc(a.form)}</td>
+          <td style="padding:6px 8px;cursor:pointer;color:var(--accent)" onclick="navigator.clipboard.writeText(this.textContent);toast('Copied!')">${esc(a.address)}</td>
+          <td style="padding:6px 8px;color:var(--text-dim)">${esc(a.note||'')}</td></tr>`;
+      }
+      html+=`</table></div>`;
+    }
+
+    if(d.similar_sounding&&d.similar_sounding.length){
+      html+=`<div class="file-report"><h4>Similar-Sounding Suffixes</h4>
+        <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <tr style="color:var(--text-dim)"><th style="text-align:left;padding:6px 8px">Suffix</th><th style="text-align:left;padding:6px 8px">Form</th><th style="text-align:left;padding:6px 8px">Standard</th><th style="text-align:left;padding:6px 8px">Similarity</th><th style="text-align:left;padding:6px 8px">Address</th></tr>`;
+      for(const s of d.similar_sounding){
+        const pct=Math.round(s.similarity*100);
+        html+=`<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px">${esc(s.suffix)}</td>
+          <td style="padding:6px 8px;font-family:var(--font-mono)">${esc(s.form)}</td>
+          <td style="padding:6px 8px">${esc(s.std)}</td>
+          <td style="padding:6px 8px;color:var(--amber)">${pct}%</td>
+          <td style="padding:6px 8px;cursor:pointer;color:var(--accent)" onclick="navigator.clipboard.writeText(this.textContent);toast('Copied!')">${esc(s.address)}</td></tr>`;
+      }
+      html+=`</table></div>`;
+    }
+
+    if(d.similar_spelled&&d.similar_spelled.length){
+      html+=`<div class="file-report"><h4>Similar-Spelled Suffixes</h4>
+        <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <tr style="color:var(--text-dim)"><th style="text-align:left;padding:6px 8px">Suffix</th><th style="text-align:left;padding:6px 8px">Form</th><th style="text-align:left;padding:6px 8px">Standard</th><th style="text-align:left;padding:6px 8px">Address</th></tr>`;
+      for(const s of d.similar_spelled){
+        html+=`<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px">${esc(s.suffix)}</td>
+          <td style="padding:6px 8px;font-family:var(--font-mono)">${esc(s.form)}</td>
+          <td style="padding:6px 8px">${esc(s.std)}</td>
+          <td style="padding:6px 8px;cursor:pointer;color:var(--accent)" onclick="navigator.clipboard.writeText(this.textContent);toast('Copied!')">${esc(s.address)}</td></tr>`;
+      }
+      html+=`</table></div>`;
+    }
+
+    el.innerHTML=html;
+  }catch(e){el.innerHTML=`<p style="color:var(--red)">${esc(e.message)}</p>`}
+}
+
+/* ── Discord Analytics ── */
+async function loadDiscordInfo(){
+  try{
+    const r=await fetch('/api/discord/info');
+    const d=await r.json();
+    $('discord-info').innerHTML=`<div class="summary-bar" style="margin-bottom:0">
+      <div class="stat accent"><div class="label">Profiles</div><div class="value">${d.profile_count}</div></div>
+      <div class="stat green"><div class="label">Events</div><div class="value">${d.event_count}</div></div>
+      <div class="stat amber"><div class="label">Unmatched</div><div class="value">${d.unmatched_count}</div></div>
+      <div class="stat"><div class="label">Bot Token</div><div class="value" style="font-size:14px">${d.has_token?'Set':'Missing'}</div></div>
+    </div>`;
+    renderChannels(d.channels||[]);
+    const sel=$('scrape-channel');
+    sel.innerHTML='<option value="">Select channel...</option>';
+    for(const c of (d.channels||[])){
+      sel.innerHTML+=`<option value="${esc(c.id)}">${esc(c.name||c.id)}</option>`;
+    }
+  }catch(e){}
+}
+
+function renderChannels(chs){
+  const el=$('channel-list');
+  if(!chs.length){el.innerHTML='<span style="color:var(--text-dim)">No channels added yet</span>';return}
+  el.innerHTML=chs.map(c=>`<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:16px;padding:4px 12px;margin:2px 4px 2px 0;font-size:12px">
+    ${esc(c.name||c.id)} <span style="color:var(--text-dim)">${esc(c.id)}</span>
+    <button style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px" onclick="removeChannel('${esc(c.id)}')">&times;</button>
+  </span>`).join('');
+}
+
+async function addChannel(){
+  const id=$('ch-id').value.trim(), name=$('ch-name').value.trim();
+  if(!id){toast('Enter a channel ID');return}
+  const r=await fetch('/api/discord/channels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,name})});
+  const d=await r.json();
+  if(d.ok){renderChannels(d.channels);$('ch-id').value='';$('ch-name').value='';loadDiscordInfo();toast('Channel added')}
+  else toast(d.error||'Failed');
+}
+
+async function removeChannel(id){
+  const r=await fetch(`/api/discord/channels?id=${id}`,{method:'DELETE'});
+  const d=await r.json();
+  if(d.ok){renderChannels(d.channels);loadDiscordInfo();toast('Channel removed')}
+}
+
+async function startScrape(){
+  const cid=$('scrape-channel').value;
+  if(!cid){toast('Select a channel first');return}
+  const r=await fetch('/api/discord/scrape',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel_id:cid})});
+  const d=await r.json();
+  if(!d.ok){toast(d.error||'Failed');return}
+  toast('Scrape started');
+  pollScrapeStatus();
+}
+
+async function pollScrapeStatus(){
+  const el=$('scrape-status');
+  const poll=async()=>{
+    try{
+      const r=await fetch('/api/discord/scrape/status');
+      const d=await r.json();
+      el.innerHTML=`<span style="color:var(--cyan)">Status:</span> ${esc(d.status)}`;
+      if(d.running) setTimeout(poll,2000);
+      else{loadDiscordInfo();if(d.error)toast('Scrape failed: '+d.error)}
+    }catch(e){el.innerHTML='<span style="color:var(--red)">Lost connection</span>'}
+  };
+  poll();
+}
+
+async function refreshDiscord(){
+  await fetch('/api/discord/refresh',{method:'POST'});
+  loadDiscordInfo();
+  toast('Data refreshed');
+}
+
+async function runDiscordLookup(){
+  const q=$('discord-lookup').value.trim();
+  const el=$('discord-lookup-results');
+  el.innerHTML='<p style="color:var(--text-dim)">Searching...</p>';
+  try{
+    const r=await fetch(`/api/discord/lookup?q=${encodeURIComponent(q)}`);
+    const d=await r.json();
+    if(!d.rows.length){el.innerHTML='<p style="color:var(--text-dim)">No results found</p>';return}
+    let html=`<div class="summary-bar" style="margin-bottom:12px">
+      <div class="stat accent"><div class="label">Matched</div><div class="value">${d.stats.matched}</div></div>
+      <div class="stat rose"><div class="label">Decline %</div><div class="value">${d.stats.decline!=null?d.stats.decline+'%':'—'}</div></div>
+      <div class="stat green"><div class="label">Check %</div><div class="value">${d.stats.check!=null?d.stats.check+'%':'—'}</div></div>
+    </div>`;
+    html+=buildStatsTable(d.rows);
+    el.innerHTML=html;
+  }catch(e){el.innerHTML=`<p style="color:var(--red)">${esc(e.message)}</p>`}
+}
+
+async function runDiscordBreakdown(){
+  const group=$('discord-group').value;
+  const min=$('discord-min').value||1;
+  const el=$('discord-breakdown-results');
+  el.innerHTML='<p style="color:var(--text-dim)">Loading...</p>';
+  try{
+    const r=await fetch(`/api/discord/breakdown?group=${encodeURIComponent(group)}&min=${min}`);
+    const d=await r.json();
+    if(!d.rows.length){el.innerHTML='<p style="color:var(--text-dim)">No data</p>';return}
+    el.innerHTML=`<p style="font-size:13px;color:var(--text-dim);margin-bottom:8px">Grouped by: <strong>${esc(d.group)}</strong> (${d.rows.length} groups)</p>`+buildStatsTable(d.rows);
+  }catch(e){el.innerHTML=`<p style="color:var(--red)">${esc(e.message)}</p>`}
+}
+
+function buildStatsTable(rows){
+  let html=`<div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse">
+    <tr style="color:var(--text-dim)"><th style="text-align:left;padding:6px 8px">Key</th>
+    <th style="text-align:right;padding:6px 8px">Declined</th><th style="text-align:right;padding:6px 8px">Checked</th>
+    <th style="text-align:right;padding:6px 8px">Total</th><th style="text-align:right;padding:6px 8px">Decline %</th></tr>`;
+  for(const r of rows){
+    const color=r.decline_pct>=70?'var(--red)':r.decline_pct>=40?'var(--amber)':'var(--green)';
+    html+=`<tr style="border-top:1px solid var(--border)">
+      <td style="padding:6px 8px">${esc(r.key)}</td>
+      <td style="padding:6px 8px;text-align:right;color:var(--rose)">${r.declined}</td>
+      <td style="padding:6px 8px;text-align:right;color:var(--green)">${r.checked}</td>
+      <td style="padding:6px 8px;text-align:right">${r.total}</td>
+      <td style="padding:6px 8px;text-align:right;color:${color};font-weight:600">${r.decline_pct}%</td></tr>`;
+  }
+  html+=`</table></div>`;
+  return html;
+}
+
+function exportDiscord(){
+  const group=$('discord-group').value;
+  const min=$('discord-min').value||1;
+  window.open(`/api/discord/export?group=${encodeURIComponent(group)}&min=${min}`);
+}
+
+/* ── Address Suggestions ── */
+async function runAddressSuggest(){
+  const addr=$('suggest-input').value.trim();
+  if(!addr){toast('Enter an address');return}
+  const el=$('suggest-results');
+  el.innerHTML='<p style="color:var(--text-dim)">Generating suggestions...</p>';
+  try{
+    const r=await fetch('/api/address-suggest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr})});
+    const d=await r.json();
+    if(d.error){el.innerHTML=`<p style="color:var(--amber)">${esc(d.error)}</p>`;return}
+    renderSuggestions(el,d);
+  }catch(e){el.innerHTML=`<p style="color:var(--red)">${esc(e.message)}</p>`}
+}
+
+/* ── Address Generator ── */
+async function runAddressGenerate(){
+  const base=$('gen-base').value.trim();
+  if(!base){toast('Enter a street base');return}
+  const exclude=$('gen-exclude').value.split('\n').map(l=>l.trim()).filter(Boolean);
+  const el=$('gen-results');
+  el.innerHTML='<p style="color:var(--text-dim)">Generating...</p>';
+  try{
+    const r=await fetch('/api/address-generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({base,exclude})});
+    const d=await r.json();
+    if(d.error){el.innerHTML=`<p style="color:var(--amber)">${esc(d.error)}</p>`;return}
+    renderSuggestions(el,d);
+  }catch(e){el.innerHTML=`<p style="color:var(--red)">${esc(e.message)}</p>`}
+}
+
+function renderSuggestions(el,d){
+  const groups={};
+  for(const s of d.suggestions){
+    const src=s.source||'other';
+    if(!groups[src])groups[src]=[];
+    groups[src].push(s);
+  }
+  const labels={usps_variant:'USPS Official Variants',misspelling:'Slight Misspellings',high_checkout_rate:'High Checkout Rate Suffixes',common_suffix:'Common Suffixes'};
+  let allAddrs=d.suggestions.map(s=>s.address).join('\n');
+  let html=`<div class="summary-bar" style="margin-bottom:12px">
+    <div class="stat accent"><div class="label">Base</div><div class="value" style="font-size:14px">${esc(d.base)}</div></div>
+    <div class="stat green"><div class="label">Current Suffix</div><div class="value" style="font-size:14px">${esc(d.current_suffix||'None')}</div></div>
+    <div class="stat"><div class="label">Total Suggestions</div><div class="value">${d.total}</div></div>
+  </div>`;
+  html+=`<div style="margin-bottom:8px"><button class="btn" style="padding:6px 14px;font-size:12px" onclick="navigator.clipboard.writeText(document.getElementById('_allsug').textContent);toast('All addresses copied!')">Copy All Addresses</button></div>`;
+  html+=`<div id="_allsug" style="display:none">${esc(allAddrs)}</div>`;
+
+  for(const [src,items] of Object.entries(groups)){
+    html+=`<div class="file-report"><h4>${esc(labels[src]||src)} <span class="badge badge-new">${items.length}</span></h4>
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+      <tr style="color:var(--text-dim)"><th style="text-align:left;padding:6px 8px">Address</th><th style="text-align:left;padding:6px 8px">Suffix</th><th style="text-align:left;padding:6px 8px">Note</th></tr>`;
+    for(const s of items){
+      html+=`<tr style="border-top:1px solid var(--border)">
+        <td style="padding:6px 8px;cursor:pointer;color:var(--accent);font-family:var(--font-mono)" onclick="navigator.clipboard.writeText(this.textContent);toast('Copied!')">${esc(s.address)}</td>
+        <td style="padding:6px 8px">${esc(s.suffix)}</td>
+        <td style="padding:6px 8px;color:var(--text-dim);font-size:12px">${esc(s.note||'')}</td></tr>`;
+    }
+    html+=`</table></div>`;
+  }
+  el.innerHTML=html;
+}
 </script>
 </body>
 </html>

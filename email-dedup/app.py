@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 Email Toolkit — Flask UI
-  Tab 1: Duplicate Checker (emails, phones, cards, addresses)
+  Tab 1: Duplicate Checker (emails, phones, cards, addresses, profile matcher)
   Tab 2: Password Generator
   Tab 3: TCGplayer Order Extractor
   Tab 4: Column Extractor
+  Tab 5: Address Lab (USPS suffix checker, Discord analytics, suggestions, generator)
 Run:  python app.py
 Open: http://localhost:5000
 """
@@ -16,10 +17,13 @@ import secrets
 import string
 import json
 import csv
-from collections import Counter
+import difflib
+from collections import Counter, defaultdict
 
 import pandas as pd
-from flask import Flask, render_template_string, request, send_file, jsonify
+from flask import Flask, render_template_string, request, send_file, jsonify, Response
+
+from pipeline import JOB, HAS_DISCORD
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
@@ -47,6 +51,628 @@ def normalize_phone(raw: str) -> str:
     if len(digits) == 11 and digits.startswith("1"):
         digits = digits[1:]
     return digits
+
+
+# ── USPS Street Suffix Table ─────────────────────────────────────────────────
+# Source: USPS Pub 28, Appendix C — https://pe.usps.com/text/pub28/28apc_002.htm
+# {primary_name: {standard_abbr: str, variants: [all accepted forms]}}
+
+USPS_SUFFIXES = {
+    "ALLEY":{"std":"ALY","v":["ALLEE","ALLEY","ALLY","ALY"]},
+    "ANEX":{"std":"ANX","v":["ANEX","ANNEX","ANNX","ANX"]},
+    "ARCADE":{"std":"ARC","v":["ARC","ARCADE"]},
+    "AVENUE":{"std":"AVE","v":["AV","AVE","AVEN","AVENU","AVENUE","AVN","AVNUE"]},
+    "BAYOU":{"std":"BYU","v":["BAYOO","BAYOU","BYU"]},
+    "BEACH":{"std":"BCH","v":["BCH","BEACH"]},
+    "BEND":{"std":"BND","v":["BEND","BND"]},
+    "BLUFF":{"std":"BLF","v":["BLF","BLUF","BLUFF"]},
+    "BLUFFS":{"std":"BLFS","v":["BLUFFS","BLFS"]},
+    "BOTTOM":{"std":"BTM","v":["BOT","BTM","BOTTM","BOTTOM"]},
+    "BOULEVARD":{"std":"BLVD","v":["BLVD","BOUL","BOULEVARD","BOULV"]},
+    "BRANCH":{"std":"BR","v":["BR","BRNCH","BRANCH"]},
+    "BRIDGE":{"std":"BRG","v":["BRDGE","BRG","BRIDGE"]},
+    "BROOK":{"std":"BRK","v":["BRK","BROOK"]},
+    "BROOKS":{"std":"BRKS","v":["BROOKS","BRKS"]},
+    "BURG":{"std":"BG","v":["BURG","BG"]},
+    "BURGS":{"std":"BGS","v":["BURGS","BGS"]},
+    "BYPASS":{"std":"BYP","v":["BYP","BYPA","BYPAS","BYPASS","BYPS"]},
+    "CAMP":{"std":"CP","v":["CAMP","CP","CMP"]},
+    "CANYON":{"std":"CYN","v":["CANYN","CANYON","CNYN","CYN"]},
+    "CAPE":{"std":"CPE","v":["CAPE","CPE"]},
+    "CAUSEWAY":{"std":"CSWY","v":["CAUSEWAY","CAUSWA","CSWY"]},
+    "CENTER":{"std":"CTR","v":["CEN","CENT","CENTER","CENTR","CENTRE","CNTER","CNTR","CTR"]},
+    "CENTERS":{"std":"CTRS","v":["CENTERS","CTRS"]},
+    "CIRCLE":{"std":"CIR","v":["CIR","CIRC","CIRCL","CIRCLE","CRCL","CRCLE"]},
+    "CIRCLES":{"std":"CIRS","v":["CIRCLES","CIRS"]},
+    "CLIFF":{"std":"CLF","v":["CLF","CLIFF"]},
+    "CLIFFS":{"std":"CLFS","v":["CLFS","CLIFFS"]},
+    "CLUB":{"std":"CLB","v":["CLB","CLUB"]},
+    "COMMON":{"std":"CMN","v":["COMMON","CMN"]},
+    "COMMONS":{"std":"CMNS","v":["COMMONS","CMNS"]},
+    "CORNER":{"std":"COR","v":["COR","CORNER"]},
+    "CORNERS":{"std":"CORS","v":["CORNERS","CORS"]},
+    "COURSE":{"std":"CRSE","v":["COURSE","CRSE"]},
+    "COURT":{"std":"CT","v":["COURT","CT"]},
+    "COURTS":{"std":"CTS","v":["COURTS","CTS"]},
+    "COVE":{"std":"CV","v":["COVE","CV"]},
+    "COVES":{"std":"CVS","v":["COVES","CVS"]},
+    "CREEK":{"std":"CRK","v":["CREEK","CRK"]},
+    "CRESCENT":{"std":"CRES","v":["CRESCENT","CRES","CRSENT","CRSNT"]},
+    "CREST":{"std":"CRST","v":["CREST","CRST"]},
+    "CROSSING":{"std":"XING","v":["CROSSING","CRSSNG","XING"]},
+    "CROSSROAD":{"std":"XRD","v":["CROSSROAD","XRD"]},
+    "CROSSROADS":{"std":"XRDS","v":["CROSSROADS","XRDS"]},
+    "CURVE":{"std":"CURV","v":["CURVE","CURV"]},
+    "DALE":{"std":"DL","v":["DALE","DL"]},
+    "DAM":{"std":"DM","v":["DAM","DM"]},
+    "DIVIDE":{"std":"DV","v":["DIV","DIVIDE","DV","DVD"]},
+    "DRIVE":{"std":"DR","v":["DR","DRIV","DRIVE","DRV"]},
+    "DRIVES":{"std":"DRS","v":["DRIVES","DRS"]},
+    "ESTATE":{"std":"EST","v":["EST","ESTATE"]},
+    "ESTATES":{"std":"ESTS","v":["ESTATES","ESTS"]},
+    "EXPRESSWAY":{"std":"EXPY","v":["EXP","EXPR","EXPRESS","EXPRESSWAY","EXPW","EXPY"]},
+    "EXTENSION":{"std":"EXT","v":["EXT","EXTENSION","EXTN","EXTNSN"]},
+    "EXTENSIONS":{"std":"EXTS","v":["EXTS","EXTENSIONS"]},
+    "FALL":{"std":"FALL","v":["FALL"]},
+    "FALLS":{"std":"FLS","v":["FALLS","FLS"]},
+    "FERRY":{"std":"FRY","v":["FERRY","FRRY","FRY"]},
+    "FIELD":{"std":"FLD","v":["FIELD","FLD"]},
+    "FIELDS":{"std":"FLDS","v":["FIELDS","FLDS"]},
+    "FLAT":{"std":"FLT","v":["FLAT","FLT"]},
+    "FLATS":{"std":"FLTS","v":["FLATS","FLTS"]},
+    "FORD":{"std":"FRD","v":["FORD","FRD"]},
+    "FORDS":{"std":"FRDS","v":["FORDS","FRDS"]},
+    "FOREST":{"std":"FRST","v":["FOREST","FORESTS","FRST"]},
+    "FORGE":{"std":"FRG","v":["FORG","FORGE","FRG"]},
+    "FORGES":{"std":"FRGS","v":["FORGES","FRGS"]},
+    "FORK":{"std":"FRK","v":["FORK","FRK"]},
+    "FORKS":{"std":"FRKS","v":["FORKS","FRKS"]},
+    "FORT":{"std":"FT","v":["FORT","FRT","FT"]},
+    "FREEWAY":{"std":"FWY","v":["FREEWAY","FREEWY","FRWAY","FRWY","FWY"]},
+    "GARDEN":{"std":"GDN","v":["GARDEN","GARDN","GRDEN","GRDN","GDN"]},
+    "GARDENS":{"std":"GDNS","v":["GARDENS","GDNS","GRDNS"]},
+    "GATEWAY":{"std":"GTWY","v":["GATEWAY","GATEWY","GATWAY","GTWAY","GTWY"]},
+    "GLEN":{"std":"GLN","v":["GLEN","GLN"]},
+    "GLENS":{"std":"GLNS","v":["GLENS","GLNS"]},
+    "GREEN":{"std":"GRN","v":["GREEN","GRN"]},
+    "GREENS":{"std":"GRNS","v":["GREENS","GRNS"]},
+    "GROVE":{"std":"GRV","v":["GROV","GROVE","GRV"]},
+    "GROVES":{"std":"GRVS","v":["GROVES","GRVS"]},
+    "HARBOR":{"std":"HBR","v":["HARB","HARBOR","HARBR","HBR","HRBOR"]},
+    "HARBORS":{"std":"HBRS","v":["HARBORS","HBRS"]},
+    "HAVEN":{"std":"HVN","v":["HAVEN","HVN"]},
+    "HEIGHTS":{"std":"HTS","v":["HT","HTS","HEIGHTS"]},
+    "HIGHWAY":{"std":"HWY","v":["HIGHWAY","HIGHWY","HIWAY","HIWY","HWAY","HWY"]},
+    "HILL":{"std":"HL","v":["HILL","HL"]},
+    "HILLS":{"std":"HLS","v":["HILLS","HLS"]},
+    "HOLLOW":{"std":"HOLW","v":["HLLW","HOLLOW","HOLLOWS","HOLW","HOLWS"]},
+    "INLET":{"std":"INLT","v":["INLT","INLET"]},
+    "ISLAND":{"std":"IS","v":["IS","ISLAND","ISLND"]},
+    "ISLANDS":{"std":"ISS","v":["ISLANDS","ISLNDS","ISS"]},
+    "ISLE":{"std":"ISLE","v":["ISLE","ISLES"]},
+    "JUNCTION":{"std":"JCT","v":["JCT","JCTION","JCTN","JUNCTION","JUNCTN","JUNCTON"]},
+    "JUNCTIONS":{"std":"JCTS","v":["JCTNS","JCTS","JUNCTIONS"]},
+    "KEY":{"std":"KY","v":["KEY","KY"]},
+    "KEYS":{"std":"KYS","v":["KEYS","KYS"]},
+    "KNOLL":{"std":"KNL","v":["KNL","KNOL","KNOLL"]},
+    "KNOLLS":{"std":"KNLS","v":["KNLS","KNOLLS"]},
+    "LAKE":{"std":"LK","v":["LK","LAKE"]},
+    "LAKES":{"std":"LKS","v":["LKS","LAKES"]},
+    "LAND":{"std":"LAND","v":["LAND"]},
+    "LANDING":{"std":"LNDG","v":["LANDING","LNDG","LNDNG"]},
+    "LANE":{"std":"LN","v":["LANE","LN"]},
+    "LIGHT":{"std":"LGT","v":["LGT","LIGHT"]},
+    "LIGHTS":{"std":"LGTS","v":["LIGHTS","LGTS"]},
+    "LOAF":{"std":"LF","v":["LF","LOAF"]},
+    "LOCK":{"std":"LCK","v":["LCK","LOCK"]},
+    "LOCKS":{"std":"LCKS","v":["LCKS","LOCKS"]},
+    "LODGE":{"std":"LDG","v":["LDG","LDGE","LODG","LODGE"]},
+    "LOOP":{"std":"LOOP","v":["LOOP","LOOPS"]},
+    "MALL":{"std":"MALL","v":["MALL"]},
+    "MANOR":{"std":"MNR","v":["MNR","MANOR"]},
+    "MANORS":{"std":"MNRS","v":["MANORS","MNRS"]},
+    "MEADOW":{"std":"MDW","v":["MEADOW","MDW"]},
+    "MEADOWS":{"std":"MDWS","v":["MDW","MDWS","MEADOWS","MEDOWS"]},
+    "MEWS":{"std":"MEWS","v":["MEWS"]},
+    "MILL":{"std":"ML","v":["MILL","ML"]},
+    "MILLS":{"std":"MLS","v":["MILLS","MLS"]},
+    "MISSION":{"std":"MSN","v":["MISSN","MSSN","MSN","MISSION"]},
+    "MOTORWAY":{"std":"MTWY","v":["MOTORWAY","MTWY"]},
+    "MOUNT":{"std":"MT","v":["MNT","MT","MOUNT"]},
+    "MOUNTAIN":{"std":"MTN","v":["MNTAIN","MNTN","MOUNTAIN","MOUNTIN","MTIN","MTN"]},
+    "MOUNTAINS":{"std":"MTNS","v":["MNTNS","MOUNTAINS","MTNS"]},
+    "NECK":{"std":"NCK","v":["NCK","NECK"]},
+    "ORCHARD":{"std":"ORCH","v":["ORCH","ORCHARD","ORCHRD"]},
+    "OVAL":{"std":"OVAL","v":["OVAL","OVL"]},
+    "OVERPASS":{"std":"OPAS","v":["OVERPASS","OPAS"]},
+    "PARK":{"std":"PARK","v":["PARK","PRK"]},
+    "PARKS":{"std":"PARK","v":["PARKS"]},
+    "PARKWAY":{"std":"PKWY","v":["PARKWAY","PARKWY","PKWAY","PKWY","PKY"]},
+    "PARKWAYS":{"std":"PKWY","v":["PARKWAYS","PKWYS"]},
+    "PASS":{"std":"PASS","v":["PASS"]},
+    "PASSAGE":{"std":"PSGE","v":["PASSAGE","PSGE"]},
+    "PATH":{"std":"PATH","v":["PATH","PATHS"]},
+    "PIKE":{"std":"PIKE","v":["PIKE","PIKES"]},
+    "PINE":{"std":"PNE","v":["PINE","PNE"]},
+    "PINES":{"std":"PNES","v":["PINES","PNES"]},
+    "PLACE":{"std":"PL","v":["PL","PLACE"]},
+    "PLAIN":{"std":"PLN","v":["PLAIN","PLN"]},
+    "PLAINS":{"std":"PLNS","v":["PLAINS","PLNS"]},
+    "PLAZA":{"std":"PLZ","v":["PLAZA","PLZ","PLZA"]},
+    "POINT":{"std":"PT","v":["POINT","PT"]},
+    "POINTS":{"std":"PTS","v":["POINTS","PTS"]},
+    "PORT":{"std":"PRT","v":["PORT","PRT"]},
+    "PORTS":{"std":"PRTS","v":["PORTS","PRTS"]},
+    "PRAIRIE":{"std":"PR","v":["PR","PRAIRIE","PRR"]},
+    "RADIAL":{"std":"RADL","v":["RAD","RADIAL","RADIEL","RADL"]},
+    "RAMP":{"std":"RAMP","v":["RAMP"]},
+    "RANCH":{"std":"RNCH","v":["RANCH","RANCHES","RNCH","RNCHS"]},
+    "RAPID":{"std":"RPD","v":["RAPID","RPD"]},
+    "RAPIDS":{"std":"RPDS","v":["RAPIDS","RPDS"]},
+    "REST":{"std":"RST","v":["REST","RST"]},
+    "RIDGE":{"std":"RDG","v":["RDG","RDGE","RIDGE"]},
+    "RIDGES":{"std":"RDGS","v":["RDGS","RIDGES"]},
+    "RIVER":{"std":"RIV","v":["RIV","RIVER","RVR","RIVR"]},
+    "ROAD":{"std":"RD","v":["RD","ROAD"]},
+    "ROADS":{"std":"RDS","v":["ROADS","RDS"]},
+    "ROUTE":{"std":"RTE","v":["ROUTE","RTE"]},
+    "ROW":{"std":"ROW","v":["ROW"]},
+    "RUE":{"std":"RUE","v":["RUE"]},
+    "RUN":{"std":"RUN","v":["RUN"]},
+    "SHOAL":{"std":"SHL","v":["SHL","SHOAL"]},
+    "SHOALS":{"std":"SHLS","v":["SHLS","SHOALS"]},
+    "SHORE":{"std":"SHR","v":["SHOAR","SHORE","SHR"]},
+    "SHORES":{"std":"SHRS","v":["SHOARS","SHORES","SHRS"]},
+    "SKYWAY":{"std":"SKWY","v":["SKYWAY","SKWY"]},
+    "SPRING":{"std":"SPG","v":["SPG","SPNG","SPRING","SPRNG"]},
+    "SPRINGS":{"std":"SPGS","v":["SPGS","SPNGS","SPRINGS","SPRNGS"]},
+    "SPUR":{"std":"SPUR","v":["SPUR"]},
+    "SPURS":{"std":"SPUR","v":["SPURS"]},
+    "SQUARE":{"std":"SQ","v":["SQ","SQR","SQRE","SQU","SQUARE"]},
+    "SQUARES":{"std":"SQS","v":["SQRS","SQUARES","SQS"]},
+    "STATION":{"std":"STA","v":["STA","STATION","STATN","STN"]},
+    "STRAVENUE":{"std":"STRA","v":["STRA","STRAV","STRAVEN","STRAVENUE","STRAVN","STRVN","STRVNUE"]},
+    "STREAM":{"std":"STRM","v":["STREAM","STREME","STRM"]},
+    "STREET":{"std":"ST","v":["STREET","STRT","ST","STR"]},
+    "STREETS":{"std":"STS","v":["STREETS","STS"]},
+    "SUMMIT":{"std":"SMT","v":["SMT","SUMIT","SUMITT","SUMMIT"]},
+    "TERRACE":{"std":"TER","v":["TER","TERR","TERRACE"]},
+    "THROUGHWAY":{"std":"TRWY","v":["THROUGHWAY","TRWY"]},
+    "TRACE":{"std":"TRCE","v":["TRACE","TRACES","TRCE"]},
+    "TRACK":{"std":"TRAK","v":["TRACK","TRACKS","TRAK","TRK","TRKS"]},
+    "TRAFFICWAY":{"std":"TRFY","v":["TRAFFICWAY","TRFY"]},
+    "TRAIL":{"std":"TRL","v":["TRAIL","TRAILS","TRL","TRLS"]},
+    "TRAILER":{"std":"TRLR","v":["TRAILER","TRLR","TRLRS"]},
+    "TUNNEL":{"std":"TUNL","v":["TUNEL","TUNL","TUNLS","TUNNEL","TUNNELS","TUNNL"]},
+    "TURNPIKE":{"std":"TPKE","v":["TRNPK","TURNPIKE","TURNPK","TPKE"]},
+    "UNDERPASS":{"std":"UPAS","v":["UNDERPASS","UPAS"]},
+    "UNION":{"std":"UN","v":["UN","UNION"]},
+    "UNIONS":{"std":"UNS","v":["UNIONS","UNS"]},
+    "VALLEY":{"std":"VLY","v":["VALLEY","VALLY","VLLY","VLY"]},
+    "VALLEYS":{"std":"VLYS","v":["VALLEYS","VLYS"]},
+    "VIADUCT":{"std":"VIA","v":["VDCT","VIA","VIADCT","VIADUCT"]},
+    "VIEW":{"std":"VW","v":["VIEW","VW"]},
+    "VIEWS":{"std":"VWS","v":["VIEWS","VWS"]},
+    "VILLAGE":{"std":"VLG","v":["VILL","VILLAG","VILLAGE","VILLG","VILLIAGE","VLG"]},
+    "VILLAGES":{"std":"VLGS","v":["VILLAGES","VLGS"]},
+    "VILLE":{"std":"VL","v":["VILLE","VL"]},
+    "VISTA":{"std":"VIS","v":["VIS","VIST","VISTA","VST","VSTA"]},
+    "WALK":{"std":"WALK","v":["WALK"]},
+    "WALKS":{"std":"WALK","v":["WALKS"]},
+    "WALL":{"std":"WALL","v":["WALL"]},
+    "WAY":{"std":"WAY","v":["WY","WAY"]},
+    "WAYS":{"std":"WAYS","v":["WAYS"]},
+    "WELL":{"std":"WL","v":["WELL","WL"]},
+    "WELLS":{"std":"WLS","v":["WELLS","WLS"]},
+}
+
+# Build reverse lookup: any variant -> primary name
+_SUFFIX_REVERSE = {}
+for _prim, _info in USPS_SUFFIXES.items():
+    for _v in _info["v"]:
+        _SUFFIX_REVERSE[_v.upper()] = _prim
+    _SUFFIX_REVERSE[_info["std"].upper()] = _prim
+
+# All variant strings for fuzzy matching
+_ALL_SUFFIX_STRINGS = sorted(set(
+    v for info in USPS_SUFFIXES.values() for v in info["v"]
+))
+
+
+def _parse_address_suffix(address: str):
+    """Split an address into (street_base, suffix_token).
+    Returns (base, suffix) where suffix is the last word if it matches a USPS suffix."""
+    parts = address.strip().split()
+    if not parts:
+        return address, None
+    # Check last word, then last 2 words joined
+    last = parts[-1].upper().rstrip(".,")
+    if last in _SUFFIX_REVERSE:
+        return " ".join(parts[:-1]), last
+    if len(parts) >= 2:
+        last2 = (parts[-2] + " " + parts[-1]).upper().rstrip(".,")
+        if last2 in _SUFFIX_REVERSE:
+            return " ".join(parts[:-2]), last2
+    return address, None
+
+
+def usps_check_suffix(address: str):
+    """Given an address, find its suffix and return alternatives, similar-sounding, similar-spelled."""
+    base, suffix = _parse_address_suffix(address)
+    if not suffix:
+        return {
+            "address": address,
+            "base": base,
+            "detected_suffix": None,
+            "error": "No recognized USPS street suffix found in this address",
+            "all_suffixes": sorted(USPS_SUFFIXES.keys()),
+        }
+
+    primary = _SUFFIX_REVERSE.get(suffix.upper(), suffix.upper())
+    info = USPS_SUFFIXES.get(primary, {})
+
+    # All official alternatives for this suffix
+    alternatives = []
+    for v in info.get("v", []):
+        if v.upper() != suffix.upper():
+            alternatives.append({"form": v, "address": f"{base} {v}"})
+    std = info.get("std", "")
+    if std.upper() != suffix.upper() and not any(a["form"] == std for a in alternatives):
+        alternatives.insert(0, {"form": std, "address": f"{base} {std}", "note": "USPS Standard"})
+
+    # Similar sounding (phonetic similarity via difflib)
+    similar_sound = []
+    suffix_up = suffix.upper()
+    for prim, pinfo in USPS_SUFFIXES.items():
+        if prim == primary:
+            continue
+        # Check if any variant sounds similar
+        for v in pinfo["v"]:
+            ratio = difflib.SequenceMatcher(None, suffix_up, v.upper()).ratio()
+            if ratio >= 0.55 and ratio < 1.0:
+                similar_sound.append({
+                    "suffix": prim,
+                    "form": v,
+                    "std": pinfo["std"],
+                    "similarity": round(ratio, 2),
+                    "address": f"{base} {v}",
+                })
+                break
+
+    similar_sound.sort(key=lambda x: -x["similarity"])
+
+    # Similar spelled (close matches via difflib)
+    close = difflib.get_close_matches(suffix_up, _ALL_SUFFIX_STRINGS, n=15, cutoff=0.5)
+    similar_spelled = []
+    seen_primaries = {primary}
+    for c in close:
+        c_primary = _SUFFIX_REVERSE.get(c, c)
+        if c_primary in seen_primaries:
+            continue
+        seen_primaries.add(c_primary)
+        c_info = USPS_SUFFIXES.get(c_primary, {})
+        similar_spelled.append({
+            "suffix": c_primary,
+            "form": c,
+            "std": c_info.get("std", c),
+            "address": f"{base} {c}",
+        })
+
+    return {
+        "address": address,
+        "base": base,
+        "detected_suffix": suffix,
+        "primary_name": primary,
+        "standard_abbr": info.get("std", ""),
+        "alternatives": alternatives,
+        "similar_sounding": similar_sound[:10],
+        "similar_spelled": similar_spelled[:10],
+    }
+
+
+# ── Discord Analytics Data Layer ─────────────────────────────────────────────
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+VALOR_JSON    = os.path.join(BASE_DIR, "valor.json")
+DECLINED_CSV  = os.path.join(BASE_DIR, "declined_profiles.csv")
+CHECKED_CSV   = os.path.join(BASE_DIR, "checked_profiles.csv")
+CHANNELS_JSON = os.path.join(BASE_DIR, "channels.json")
+FUZZY_CUTOFF  = 0.75
+
+
+def _load_valor_profiles():
+    """Load profiles from valor.json if it exists."""
+    if not os.path.exists(VALOR_JSON):
+        return {}
+    try:
+        with open(VALOR_JSON, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    except Exception:
+        return {}
+
+    profiles = {}
+    for pid, p in raw.items():
+        b = p.get("billing") or {}
+        s = p.get("shipping") or {}
+        c = p.get("card") or {}
+        name = (p.get("name") or "").strip()
+        if not name:
+            continue
+        profiles[name.lower()] = {
+            "name":      name,
+            "card_type": (c.get("type") or "unknown").lower(),
+            "zip":       (b.get("zipCode")     or s.get("zipCode")     or "unknown").strip(),
+            "state":     (b.get("state")       or s.get("state")       or "unknown").strip(),
+            "city":      (b.get("city")        or s.get("city")        or "unknown").strip(),
+            "address":   (b.get("addressLine1") or s.get("addressLine1") or "unknown").strip(),
+        }
+    return profiles
+
+
+def load_discord_data():
+    """Load profiles, declined/checked events, match them via fuzzy matching."""
+    profiles = _load_valor_profiles()
+    if not profiles:
+        return {}, [], []
+
+    keys = list(profiles.keys())
+
+    def read_events(path, status):
+        out = []
+        if not os.path.exists(path):
+            return out
+        try:
+            with open(path, newline="", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    out.append({
+                        "profile":   (row.get("profile") or "").strip(),
+                        "timestamp": row.get("timestamp", ""),
+                        "site":      (row.get("site") or "").strip(),
+                        "status":    status,
+                    })
+        except Exception:
+            pass
+        return out
+
+    events = read_events(DECLINED_CSV, "declined") + read_events(CHECKED_CSV, "checked")
+
+    match_cache, unmatched = {}, set()
+    for e in events:
+        raw_name = e["profile"]
+        low = raw_name.lower()
+        if low in match_cache:
+            e["valor"] = match_cache[low]
+            continue
+        hit = None
+        if low in profiles:
+            hit = profiles[low]
+        else:
+            m = difflib.get_close_matches(low, keys, n=1, cutoff=FUZZY_CUTOFF)
+            if m:
+                hit = profiles[m[0]]
+            else:
+                for k in keys:
+                    if low and (low in k or k in low):
+                        hit = profiles[k]
+                        break
+        if hit is None:
+            unmatched.add(raw_name)
+        match_cache[low] = hit
+        e["valor"] = hit
+
+    return profiles, [e for e in events if e.get("valor")], sorted(unmatched)
+
+
+def discord_aggregate(events, keyfn):
+    buckets = defaultdict(lambda: {"declined": 0, "checked": 0})
+    for e in events:
+        buckets[keyfn(e)][e["status"]] += 1
+    rows = []
+    for k, v in buckets.items():
+        total = v["declined"] + v["checked"]
+        rows.append({
+            "key":         k or "unknown",
+            "declined":    v["declined"],
+            "checked":     v["checked"],
+            "total":       total,
+            "decline_pct": round(v["declined"] / total * 100, 1) if total else 0.0,
+            "check_pct":   round(v["checked"]  / total * 100, 1) if total else 0.0,
+        })
+    rows.sort(key=lambda r: (-r["decline_pct"], -r["total"]))
+    return rows
+
+
+DISCORD_GROUPINGS = {
+    "Profile":    lambda e: e["valor"]["name"],
+    "Card Type":  lambda e: e["valor"]["card_type"],
+    "Zip Code":   lambda e: e["valor"]["zip"],
+    "State":      lambda e: e["valor"]["state"],
+    "Address":    lambda e: e["valor"]["address"],
+    "Type + Zip": lambda e: f'{e["valor"]["card_type"]} | {e["valor"]["zip"]}',
+    "Site":       lambda e: e.get("site") or "unknown",
+}
+
+
+# Channel store
+def _load_channels():
+    if not os.path.exists(CHANNELS_JSON):
+        return []
+    try:
+        with open(CHANNELS_JSON, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _save_channels(items):
+    with open(CHANNELS_JSON, "w", encoding="utf-8") as f:
+        json.dump(items, f, indent=2)
+
+
+# Cache
+_discord_cache = {"mtime": None, "profiles": {}, "events": [], "unmatched": [], "by_profile": []}
+
+
+def _discord_stamp():
+    parts = []
+    for p in (VALOR_JSON, DECLINED_CSV, CHECKED_CSV):
+        parts.append(os.path.getmtime(p) if os.path.exists(p) else 0)
+    return tuple(parts)
+
+
+def get_discord_data():
+    st = _discord_stamp()
+    if _discord_cache["mtime"] != st:
+        profiles, events, unmatched = load_discord_data()
+        _discord_cache.update({
+            "mtime":      st,
+            "profiles":   profiles,
+            "events":     events,
+            "unmatched":  unmatched,
+            "by_profile": discord_aggregate(events, lambda e: e["valor"]["name"]),
+        })
+    return _discord_cache
+
+
+# ── Address Suggestion Engine ────────────────────────────────────────────────
+
+def _generate_misspellings(word: str) -> list[str]:
+    """Generate slight misspellings of a word."""
+    results = set()
+    w = word.upper()
+    if len(w) < 2:
+        return []
+
+    # Swap adjacent characters
+    for i in range(len(w) - 1):
+        swapped = w[:i] + w[i+1] + w[i] + w[i+2:]
+        if swapped != w:
+            results.add(swapped)
+
+    # Double a letter
+    for i in range(len(w)):
+        doubled = w[:i] + w[i] + w[i:]
+        if doubled != w:
+            results.add(doubled)
+
+    # Drop a letter (only if word long enough)
+    if len(w) >= 4:
+        for i in range(len(w)):
+            dropped = w[:i] + w[i+1:]
+            if dropped != w and len(dropped) >= 2:
+                results.add(dropped)
+
+    # Common letter substitutions
+    subs = {"S": "Z", "Z": "S", "C": "K", "K": "C", "PH": "F", "F": "PH",
+            "EE": "EA", "EA": "EE", "OO": "OU", "OU": "OO", "IE": "EI", "EI": "IE",
+            "E": "A", "A": "E", "I": "Y", "Y": "I"}
+    for old, new in subs.items():
+        if old in w:
+            results.add(w.replace(old, new, 1))
+
+    results.discard(w)
+    return sorted(results)[:12]
+
+
+def generate_address_suggestions(base: str, current_suffix: str | None = None,
+                                 used_addresses: set | None = None,
+                                 decline_data: list | None = None) -> dict:
+    """Generate new address form suggestions that haven't been used before."""
+    used = {a.lower() for a in (used_addresses or set())}
+    suggestions = []
+
+    # 1) All USPS suffix alternatives
+    for prim, info in USPS_SUFFIXES.items():
+        for v in info["v"]:
+            addr = f"{base} {v}"
+            if addr.lower() not in used:
+                suggestions.append({
+                    "address": addr,
+                    "source": "usps_variant",
+                    "suffix": v,
+                    "primary": prim,
+                    "note": f"Official USPS variant of {prim}",
+                })
+
+    # 2) Misspellings of current suffix
+    if current_suffix:
+        for mis in _generate_misspellings(current_suffix):
+            addr = f"{base} {mis}"
+            if addr.lower() not in used:
+                suggestions.append({
+                    "address": addr,
+                    "source": "misspelling",
+                    "suffix": mis,
+                    "note": f"Slight misspelling of {current_suffix}",
+                })
+
+    # 3) Commonly successful suffixes from decline data
+    if decline_data:
+        # Find which suffixes have better checkout rates
+        suffix_stats = defaultdict(lambda: {"declined": 0, "checked": 0})
+        for e in decline_data:
+            addr = e.get("valor", {}).get("address", "")
+            _, sfx = _parse_address_suffix(addr)
+            if sfx:
+                prim = _SUFFIX_REVERSE.get(sfx.upper(), sfx.upper())
+                suffix_stats[prim][e["status"]] += 1
+
+        good_suffixes = []
+        for sfx, stats in suffix_stats.items():
+            total = stats["declined"] + stats["checked"]
+            if total >= 2 and stats["checked"] / total >= 0.4:
+                good_suffixes.append((sfx, stats["checked"] / total))
+
+        good_suffixes.sort(key=lambda x: -x[1])
+        for sfx_name, rate in good_suffixes[:8]:
+            info = USPS_SUFFIXES.get(sfx_name, {})
+            for v in info.get("v", []):
+                addr = f"{base} {v}"
+                if addr.lower() not in used:
+                    suggestions.append({
+                        "address": addr,
+                        "source": "high_checkout_rate",
+                        "suffix": v,
+                        "primary": sfx_name,
+                        "note": f"{sfx_name} has {round(rate*100)}% checkout rate",
+                    })
+                    break
+
+    # 4) Commonly used suffixes (top ~20 most common)
+    common_suffixes = [
+        "STREET", "AVENUE", "DRIVE", "ROAD", "LANE", "COURT", "CIRCLE",
+        "BOULEVARD", "PLACE", "WAY", "TRAIL", "TERRACE", "PARKWAY",
+        "HIGHWAY", "RIDGE", "HILL", "CREEK", "POINT", "SQUARE", "RUN",
+    ]
+    for prim in common_suffixes:
+        info = USPS_SUFFIXES.get(prim, {})
+        for v in info.get("v", []):
+            addr = f"{base} {v}"
+            if addr.lower() not in used:
+                suggestions.append({
+                    "address": addr,
+                    "source": "common_suffix",
+                    "suffix": v,
+                    "primary": prim,
+                    "note": f"Commonly used street suffix",
+                })
+                break
+
+    # Deduplicate by address
+    seen_addrs = set()
+    unique = []
+    for s in suggestions:
+        key = s["address"].lower()
+        if key not in seen_addrs:
+            seen_addrs.add(key)
+            unique.append(s)
+
+    return {
+        "base": base,
+        "current_suffix": current_suffix,
+        "suggestions": unique,
+        "total": len(unique),
+    }
 
 
 # ── Email Logic ──────────────────────────────────────────────────────────────
@@ -836,6 +1462,208 @@ def download(kind):
     buf = io.BytesIO(data.encode("utf-8"))
     buf.seek(0)
     return send_file(buf, as_attachment=True, download_name=fname, mimetype="text/plain")
+
+
+# ── Address Lab API Routes ───────────────────────────────────────────────────
+
+@app.route("/api/usps-check", methods=["POST"])
+def api_usps_check():
+    body = request.get_json(force=True, silent=True) or {}
+    address = (body.get("address") or "").strip()
+    if not address:
+        return jsonify({"error": "address is required"}), 400
+    return jsonify(usps_check_suffix(address))
+
+
+@app.route("/api/address-suggest", methods=["POST"])
+def api_address_suggest():
+    body = request.get_json(force=True, silent=True) or {}
+    address = (body.get("address") or "").strip()
+    if not address:
+        return jsonify({"error": "address is required"}), 400
+
+    base, suffix = _parse_address_suffix(address)
+
+    # Optionally pull decline data for smarter suggestions
+    decline_events = []
+    try:
+        d = get_discord_data()
+        decline_events = d.get("events", [])
+    except Exception:
+        pass
+
+    # Collect already-used addresses from decline data
+    used = set()
+    for e in decline_events:
+        v = e.get("valor", {})
+        if v:
+            used.add(v.get("address", "").lower())
+
+    result = generate_address_suggestions(
+        base, suffix, used_addresses=used, decline_data=decline_events
+    )
+    return jsonify(result)
+
+
+@app.route("/api/address-generate", methods=["POST"])
+def api_address_generate():
+    """Generate brand new address variations that have never been used."""
+    body = request.get_json(force=True, silent=True) or {}
+    base = (body.get("base") or "").strip()
+    if not base:
+        return jsonify({"error": "base (street without suffix) is required"}), 400
+
+    exclude_raw = body.get("exclude", [])
+    used = {a.lower() for a in exclude_raw if isinstance(a, str)}
+
+    # Also pull used addresses from Discord data
+    try:
+        d = get_discord_data()
+        for e in d.get("events", []):
+            v = e.get("valor", {})
+            if v:
+                used.add(v.get("address", "").lower())
+    except Exception:
+        pass
+
+    result = generate_address_suggestions(base, None, used_addresses=used)
+    return jsonify(result)
+
+
+# ── Discord Analytics API Routes ─────────────────────────────────────────────
+
+@app.route("/api/discord/lookup")
+def api_discord_lookup():
+    q = (request.args.get("q") or "").strip().lower()
+    d = get_discord_data()
+    rows_all = d.get("by_profile", [])
+
+    if not q:
+        rows = rows_all
+    else:
+        rows = [r for r in rows_all if q in r["key"].lower()]
+        if not rows:
+            names = [r["key"].lower() for r in rows_all]
+            close = set(difflib.get_close_matches(q, names, n=12, cutoff=0.5))
+            rows = [r for r in rows_all if r["key"].lower() in close]
+
+    dec = sum(r["declined"] for r in rows)
+    chk = sum(r["checked"]  for r in rows)
+    tot = dec + chk
+    return jsonify({
+        "rows": rows,
+        "stats": {
+            "total":   tot,
+            "decline": round(dec / tot * 100, 1) if tot else None,
+            "check":   round(chk / tot * 100, 1) if tot else None,
+            "matched": len(rows),
+        },
+    })
+
+
+@app.route("/api/discord/breakdown")
+def api_discord_breakdown():
+    name = request.args.get("group", "Card Type")
+    try:
+        minimum = int(request.args.get("min", "1"))
+    except ValueError:
+        minimum = 1
+    keyfn = DISCORD_GROUPINGS.get(name, DISCORD_GROUPINGS["Card Type"])
+    d = get_discord_data()
+    rows = [r for r in discord_aggregate(d["events"], keyfn) if r["total"] >= minimum]
+    return jsonify({"group": name, "rows": rows})
+
+
+@app.route("/api/discord/unmatched")
+def api_discord_unmatched():
+    return jsonify({"unmatched": get_discord_data()["unmatched"]})
+
+
+@app.route("/api/discord/export")
+def api_discord_export():
+    name = request.args.get("group", "Card Type")
+    try:
+        minimum = int(request.args.get("min", "1"))
+    except ValueError:
+        minimum = 1
+    keyfn = DISCORD_GROUPINGS.get(name, DISCORD_GROUPINGS["Card Type"])
+    rows = [r for r in discord_aggregate(get_discord_data()["events"], keyfn)
+            if r["total"] >= minimum]
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=["key", "declined", "checked", "total",
+                                         "decline_pct", "check_pct"])
+    w.writeheader()
+    w.writerows(rows)
+    fn = f'stats_by_{name.lower().replace(" ", "_").replace("+", "and")}.csv'
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{fn}"'})
+
+
+@app.route("/api/discord/refresh", methods=["POST"])
+def api_discord_refresh():
+    _discord_cache["mtime"] = None
+    d = get_discord_data()
+    return jsonify({"ok": True, "profiles": len(d["profiles"]),
+                    "events": len(d["events"]), "unmatched": len(d["unmatched"])})
+
+
+# ---- Channel management ----
+@app.route("/api/discord/channels", methods=["GET", "POST", "DELETE"])
+def api_discord_channels():
+    channels = _load_channels()
+    if request.method == "GET":
+        return jsonify({"channels": channels})
+    if request.method == "POST":
+        body = request.get_json(force=True, silent=True) or {}
+        cid  = str(body.get("id", "")).strip()
+        name = (body.get("name") or "").strip() or cid
+        if not cid.isdigit():
+            return jsonify({"ok": False, "error": "channel id must be numeric"}), 400
+        channels = [c for c in channels if str(c.get("id")) != cid]
+        channels.append({"id": cid, "name": name})
+        _save_channels(channels)
+        return jsonify({"ok": True, "channels": channels})
+    if request.method == "DELETE":
+        cid = str(request.args.get("id", "")).strip()
+        channels = [c for c in channels if str(c.get("id")) != cid]
+        _save_channels(channels)
+        return jsonify({"ok": True, "channels": channels})
+
+
+# ---- Scrape control ----
+@app.route("/api/discord/scrape", methods=["POST"])
+def api_discord_scrape():
+    token = os.environ.get("DISCORD_BOT_TOKEN")
+    if not token:
+        return jsonify({"ok": False, "error": "DISCORD_BOT_TOKEN env var not set"}), 400
+    body = request.get_json(force=True, silent=True) or {}
+    cid  = str(body.get("channel_id") or request.args.get("channel_id") or "").strip()
+    if not cid.isdigit():
+        return jsonify({"ok": False, "error": "channel_id must be numeric"}), 400
+    ok = JOB.start(cid, token)
+    if not ok:
+        return jsonify({"ok": False, "error": "a scrape is already running"}), 409
+    return jsonify({"ok": True, "channel_id": cid})
+
+
+@app.route("/api/discord/scrape/status")
+def api_discord_scrape_status():
+    return jsonify(JOB.snapshot())
+
+
+@app.route("/api/discord/info")
+def api_discord_info():
+    """Summary info for the Address Lab dashboard."""
+    d = get_discord_data()
+    return jsonify({
+        "profile_count":  len(d.get("profiles", {})),
+        "event_count":    len(d.get("events", [])),
+        "unmatched_count": len(d.get("unmatched", [])),
+        "groupings":      list(DISCORD_GROUPINGS.keys()),
+        "channels":       _load_channels(),
+        "has_token":      bool(os.environ.get("DISCORD_BOT_TOKEN")),
+        "has_discord_py": HAS_DISCORD,
+    })
 
 
 # ── HTML ─────────────────────────────────────────────────────────────────────
