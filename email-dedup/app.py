@@ -18,6 +18,7 @@ import string
 import json
 import csv
 import difflib
+import zipfile
 from collections import Counter, defaultdict
 
 import pandas as pd
@@ -410,12 +411,14 @@ def _load_valor_profiles():
 
 
 def load_discord_data():
-    """Load profiles, declined/checked events, match them via fuzzy matching."""
-    profiles = _load_valor_profiles()
-    if not profiles:
-        return {}, [], []
+    """Load profiles, declined/checked events, match them via fuzzy matching.
 
-    keys = list(profiles.keys())
+    Works in two modes:
+    - WITH valor.json: enriches events with card type, zip, address, etc.
+    - WITHOUT valor.json: uses profile name + site from CSVs directly.
+    """
+    valor_profiles = _load_valor_profiles()
+    keys = list(valor_profiles.keys()) if valor_profiles else []
 
     def read_events(path, status):
         out = []
@@ -435,32 +438,52 @@ def load_discord_data():
         return out
 
     events = read_events(DECLINED_CSV, "declined") + read_events(CHECKED_CSV, "checked")
+    if not events:
+        return valor_profiles, [], []
 
+    # Build profiles from CSV names (fallback when valor.json is missing)
+    all_profiles = dict(valor_profiles)
     match_cache, unmatched = {}, set()
     for e in events:
         raw_name = e["profile"]
+        if not raw_name:
+            continue
         low = raw_name.lower()
         if low in match_cache:
             e["valor"] = match_cache[low]
             continue
         hit = None
-        if low in profiles:
-            hit = profiles[low]
-        else:
-            m = difflib.get_close_matches(low, keys, n=1, cutoff=FUZZY_CUTOFF)
-            if m:
-                hit = profiles[m[0]]
+        # Try valor.json match first
+        if valor_profiles:
+            if low in valor_profiles:
+                hit = valor_profiles[low]
             else:
-                for k in keys:
-                    if low and (low in k or k in low):
-                        hit = profiles[k]
-                        break
+                m = difflib.get_close_matches(low, keys, n=1, cutoff=FUZZY_CUTOFF)
+                if m:
+                    hit = valor_profiles[m[0]]
+                else:
+                    for k in keys:
+                        if low and (low in k or k in low):
+                            hit = valor_profiles[k]
+                            break
+        # No valor.json or no match -> create a basic profile from the CSV name
         if hit is None:
-            unmatched.add(raw_name)
+            if valor_profiles:
+                unmatched.add(raw_name)
+            hit = {
+                "name":      raw_name,
+                "card_type": "unknown",
+                "zip":       "unknown",
+                "state":     "unknown",
+                "city":      "unknown",
+                "address":   "unknown",
+            }
+            if low not in all_profiles:
+                all_profiles[low] = hit
         match_cache[low] = hit
         e["valor"] = hit
 
-    return profiles, [e for e in events if e.get("valor")], sorted(unmatched)
+    return all_profiles, [e for e in events if e.get("valor")], sorted(unmatched)
 
 
 def discord_aggregate(events, keyfn):
@@ -495,13 +518,33 @@ DISCORD_GROUPINGS = {
 
 # Channel store
 def _load_channels():
-    if not os.path.exists(CHANNELS_JSON):
-        return []
-    try:
-        with open(CHANNELS_JSON, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
+    """Load channels from channels.json, seeded from DISCORD_CHANNELS env var.
+
+    DISCORD_CHANNELS format (set in Render):
+      {"channel_id":"name","channel_id":"name",...}
+      e.g. {"1422713687008870400":"valor-cooked","9999":"hayha"}
+    """
+    channels = []
+    if os.path.exists(CHANNELS_JSON):
+        try:
+            with open(CHANNELS_JSON, "r", encoding="utf-8") as f:
+                channels = json.load(f)
+        except Exception:
+            channels = []
+
+    # Seed from env var (only adds channels not already present)
+    env_raw = os.environ.get("DISCORD_CHANNELS", "")
+    if env_raw:
+        try:
+            env_map = json.loads(env_raw)   # {"id": "name", ...}
+            existing_ids = {str(ch.get("id")) for ch in channels}
+            for cid, cname in env_map.items():
+                if str(cid) not in existing_ids:
+                    channels.append({"id": str(cid), "name": cname or str(cid)})
+        except Exception:
+            pass
+
+    return channels
 
 
 def _save_channels(items):
@@ -1663,6 +1706,77 @@ def api_discord_info():
         "channels":       _load_channels(),
         "has_token":      bool(os.environ.get("DISCORD_BOT_TOKEN")),
         "has_discord_py": HAS_DISCORD,
+    })
+
+
+# ---- Download / Upload scraped data ----
+@app.route("/api/discord/download-data")
+def api_discord_download_data():
+    """Download scraped CSVs as a zip bundle for backup / reload."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, path in [("webhook_history.csv", os.path.join(BASE_DIR, "webhook_history.csv")),
+                           ("declined_profiles.csv", DECLINED_CSV),
+                           ("checked_profiles.csv", CHECKED_CSV)]:
+            if os.path.exists(path):
+                zf.write(path, name)
+    buf.seek(0)
+    if buf.getbuffer().nbytes <= 22:  # empty zip
+        return jsonify({"ok": False, "error": "No scraped data to download"}), 404
+    return send_file(buf, as_attachment=True,
+                     download_name="discord_scraped_data.zip",
+                     mimetype="application/zip")
+
+
+@app.route("/api/discord/upload-data", methods=["POST"])
+def api_discord_upload_data():
+    """Upload a previously downloaded zip (or individual CSVs) to restore scraped data."""
+    restored = []
+    valid_names = {"webhook_history.csv", "declined_profiles.csv", "checked_profiles.csv"}
+
+    for f in request.files.getlist("files"):
+        fname = (f.filename or "").lower()
+
+        # Handle zip file
+        if fname.endswith(".zip"):
+            try:
+                zf = zipfile.ZipFile(f.stream, "r")
+                for zname in zf.namelist():
+                    base = os.path.basename(zname)
+                    if base in valid_names:
+                        target = os.path.join(BASE_DIR, base)
+                        with zf.open(zname) as src, open(target, "wb") as dst:
+                            dst.write(src.read())
+                        restored.append(base)
+            except Exception as e:
+                return jsonify({"ok": False, "error": f"Bad zip: {e}"}), 400
+            continue
+
+        # Handle individual CSV
+        base = os.path.basename(fname)
+        if base in valid_names:
+            target = os.path.join(BASE_DIR, base)
+            f.save(target)
+            restored.append(base)
+
+    if not restored:
+        return jsonify({"ok": False, "error": "No valid CSV files found"}), 400
+
+    # If only webhook_history was uploaded, re-split into declined/checked
+    if "webhook_history.csv" in restored and "declined_profiles.csv" not in restored:
+        from pipeline import _filter_and_write
+        _filter_and_write()
+        restored += ["declined_profiles.csv (generated)", "checked_profiles.csv (generated)"]
+
+    # Bust cache
+    _discord_cache["mtime"] = None
+    d = get_discord_data()
+
+    return jsonify({
+        "ok": True,
+        "restored": restored,
+        "profiles": len(d["profiles"]),
+        "events": len(d["events"]),
     })
 
 

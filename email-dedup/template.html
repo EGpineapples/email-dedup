@@ -496,6 +496,16 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
           <button class="btn" style="padding:8px 16px;font-size:13px;background:var(--surface);border:1px solid var(--border);color:var(--text)" onclick="refreshDiscord()">Refresh Data</button>
         </div>
         <div id="scrape-status" style="font-size:13px;color:var(--text-dim)"></div>
+
+        <!-- Data Backup / Restore -->
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <span style="font-size:12px;color:var(--text-dim)">Scraped data:</span>
+          <button class="btn" style="padding:6px 14px;font-size:12px;background:var(--surface);border:1px solid var(--border);color:var(--text)" onclick="downloadScrapedData()">⬇ Download Backup</button>
+          <label class="btn" style="padding:6px 14px;font-size:12px;background:var(--surface);border:1px solid var(--border);color:var(--text);cursor:pointer">
+            ⬆ Upload CSV / Zip
+            <input type="file" accept=".csv,.zip" multiple hidden onchange="uploadScrapedData(this.files)">
+          </label>
+        </div>
       </div>
 
       <!-- Analytics Section -->
@@ -1414,6 +1424,24 @@ async function refreshDiscord(){
   await fetch('/api/discord/refresh',{method:'POST'});
   loadDiscordInfo();
   toast('Data refreshed');
+}
+
+function downloadScrapedData(){
+  window.open('/api/discord/download-data','_blank');
+}
+
+async function uploadScrapedData(files){
+  if(!files.length) return;
+  const fd=new FormData();
+  for(const f of files) fd.append('files',f);
+  try{
+    const r=await fetch('/api/discord/upload-data',{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.ok){
+      toast(`Restored: ${d.restored.join(', ')} — ${d.profiles} profiles, ${d.events} events`);
+      loadDiscordInfo();
+    }else{toast(d.error||'Upload failed')}
+  }catch(e){toast('Upload error: '+e.message)}
 }
 
 async function runDiscordLookup(){
