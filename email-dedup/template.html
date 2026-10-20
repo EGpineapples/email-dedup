@@ -155,6 +155,7 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
     <button class="tab-btn" onclick="switchTab('orders')">Orders</button>
     <button class="tab-btn" onclick="switchTab('extractor')">Column Extractor</button>
     <button class="tab-btn" onclick="switchTab('addresslab')">Address Lab</button>
+    <button class="tab-btn" onclick="switchTab('classifier')">Address ML</button>
   </div>
 
   <!-- ═══ TAB 1: DUPLICATE CHECKER ═══ -->
@@ -569,6 +570,73 @@ table.data .game-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weig
     </div>
   </div>
 
+  <!-- ═══ TAB 6: ADDRESS ML CLASSIFIER ═══ -->
+  <div id="tab-classifier" class="tab-panel">
+    <div class="card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+      <h3 style="font-size:16px;margin-bottom:4px">Address Outcome Classifier</h3>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Upload shipping data (Status / Address / Price lines), train a model, then predict outcomes for new addresses.</p>
+
+      <!-- Upload -->
+      <div style="display:flex;gap:12px;align-items:stretch;flex-wrap:wrap;margin-bottom:16px">
+        <textarea id="clf-paste" rows="5" style="flex:2;min-width:250px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font:13px var(--font-mono);outline:none;resize:vertical" placeholder="Paste data here — or upload a file →"></textarea>
+        <div style="flex:1;min-width:150px;display:flex;flex-direction:column;gap:8px">
+          <label class="btn" style="text-align:center;cursor:pointer;padding:10px 16px;font-size:13px;background:var(--surface);border:1px solid var(--border);color:var(--text)">
+            📂 Upload File
+            <input type="file" accept=".txt,.csv" hidden onchange="clfUploadFile(this.files[0])">
+          </label>
+          <button class="btn" style="padding:10px 16px;font-size:13px" onclick="clfUploadPaste()">Load Pasted Data</button>
+        </div>
+      </div>
+      <div id="clf-upload-status"></div>
+    </div>
+
+    <!-- Train -->
+    <div class="card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn" style="padding:10px 20px;font-size:14px" onclick="clfTrain()">🧠 Train Model</button>
+        <span id="clf-train-status" style="font-size:13px;color:var(--text-dim)"></span>
+      </div>
+      <!-- Model persistence -->
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--border)">
+        <span id="clf-model-state" style="font-size:12px;color:var(--text-dim)">Model: checking...</span>
+        <button class="btn" style="padding:6px 14px;font-size:12px;background:var(--surface);border:1px solid var(--border);color:var(--text)" onclick="clfDownloadModel()">⬇ Download Model</button>
+        <label class="btn" style="padding:6px 14px;font-size:12px;background:var(--surface);border:1px solid var(--border);color:var(--text);cursor:pointer">
+          ⬆ Upload Model
+          <input type="file" accept=".pkl" hidden onchange="clfUploadModel(this.files[0])">
+        </label>
+      </div>
+      <div id="clf-metrics"></div>
+    </div>
+
+    <!-- Predict -->
+    <div class="card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+      <h4 style="font-size:14px;margin-bottom:12px">Predict New Address</h4>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        <input type="text" id="clf-predict-input" placeholder="e.g. 3 New York Ave 488, Jersey City, Nj 07307" style="flex:1;min-width:250px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font:14px var(--font-ui);outline:none"
+          onkeydown="if(event.key==='Enter')clfPredict()">
+        <button class="btn" style="padding:10px 20px;font-size:14px" onclick="clfPredict()">Predict</button>
+      </div>
+      <div id="clf-predict-result"></div>
+    </div>
+
+    <!-- Search / Filter -->
+    <div class="card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px">
+      <h4 style="font-size:14px;margin-bottom:12px">Search &amp; Filter Training Data</h4>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        <input type="text" id="clf-search-q" placeholder="Fuzzy search address..." style="flex:1;min-width:200px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font:13px var(--font-ui);outline:none"
+          onkeydown="if(event.key==='Enter')clfSearch()">
+        <select id="clf-search-status" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font:13px var(--font-ui)">
+          <option value="">All statuses</option>
+          <option value="Shipped">Shipped</option>
+          <option value="Rejected">Rejected</option>
+          <option value="Accepted">Accepted</option>
+        </select>
+        <button class="btn" style="padding:10px 16px;font-size:13px" onclick="clfSearch()">Search</button>
+      </div>
+      <div id="clf-search-results"></div>
+    </div>
+  </div>
+
 </div>
 <div id="toast"></div>
 
@@ -646,12 +714,13 @@ function buildFormData(keys){
 /* ── Tabs ── */
 function switchTab(name){
   document.querySelectorAll('.tab-btn').forEach((b,i)=>{
-    const panels=['dedup','passwords','orders','extractor','addresslab'];
+    const panels=['dedup','passwords','orders','extractor','addresslab','classifier'];
     const active=panels[i]===name;
     b.classList.toggle('active',active);
     $('tab-'+panels[i]).classList.toggle('active',active);
   });
   if(name==='addresslab') loadDiscordInfo();
+  if(name==='classifier') clfLoadStatus();
 }
 function switchAddrLab(name){
   document.querySelectorAll('#tab-addresslab > .sub-tabs .sub-tab').forEach(b=>{
@@ -1558,6 +1627,217 @@ function renderSuggestions(el,d){
     html+=`</table></div>`;
   }
   el.innerHTML=html;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ADDRESS ML CLASSIFIER
+   ══════════════════════════════════════════════════════════════════════════ */
+
+async function clfUploadFile(file){
+  if(!file) return;
+  const fd=new FormData(); fd.append('file',file);
+  const el=$('clf-upload-status');
+  el.innerHTML='<p style="color:var(--text-dim)">Parsing...</p>';
+  try{
+    const r=await fetch('/api/classifier/upload',{method:'POST',body:fd});
+    const d=await r.json();
+    if(!d.ok){el.innerHTML=`<p style="color:var(--red)">${esc(d.error)}</p>`;return}
+    clfShowUploadResult(d,el);
+  }catch(e){el.innerHTML=`<p style="color:var(--red)">${esc(e.message)}</p>`}
+}
+
+async function clfUploadPaste(){
+  const text=$('clf-paste').value.trim();
+  if(!text){toast('Paste data first');return}
+  const el=$('clf-upload-status');
+  el.innerHTML='<p style="color:var(--text-dim)">Parsing...</p>';
+  try{
+    const r=await fetch('/api/classifier/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+    const d=await r.json();
+    if(!d.ok){el.innerHTML=`<p style="color:var(--red)">${esc(d.error)}</p>`;return}
+    clfShowUploadResult(d,el);
+  }catch(e){el.innerHTML=`<p style="color:var(--red)">${esc(e.message)}</p>`}
+}
+
+function clfShowUploadResult(d,el){
+  const statuses=Object.entries(d.by_status).map(([k,v])=>`<div class="stat ${k==='Shipped'?'green':k==='Rejected'?'rose':'accent'}"><div class="label">${esc(k)}</div><div class="value">${v}</div></div>`).join('');
+  el.innerHTML=`<div class="summary-bar" style="margin-bottom:12px">
+    <div class="stat"><div class="label">Total Records</div><div class="value">${d.total}</div></div>
+    ${statuses}
+  </div><p style="font-size:13px;color:var(--green)">✓ Data loaded — ready to train</p>`;
+}
+
+async function clfTrain(){
+  const el=$('clf-metrics');
+  const st=$('clf-train-status');
+  st.textContent='Training...';
+  el.innerHTML='';
+  try{
+    const r=await fetch('/api/classifier/train',{method:'POST'});
+    const d=await r.json();
+    if(!d.ok){st.textContent='';el.innerHTML=`<p style="color:var(--red)">${esc(d.error)}</p>`;return}
+    st.textContent=`✓ Accuracy: ${(d.accuracy*100).toFixed(1)}% (train: ${d.train_size}, test: ${d.test_size})`;
+
+    let html='<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">';
+
+    // Confusion matrix
+    html+=`<div><h5 style="font-size:13px;margin-bottom:8px;color:var(--text-dim)">Confusion Matrix</h5>
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+      <tr><td></td>${d.labels.map(l=>`<th style="padding:6px;text-align:center;color:var(--text-dim)">${esc(l)}</th>`).join('')}</tr>`;
+    d.confusion_matrix.forEach((row,i)=>{
+      html+=`<tr><th style="padding:6px;text-align:right;color:var(--text-dim)">${esc(d.labels[i])}</th>`;
+      row.forEach(v=>{html+=`<td style="padding:6px;text-align:center;background:${v>0?'var(--accent)':'var(--surface-2)'};color:${v>0?'#fff':'var(--text-dim)'};border-radius:4px">${v}</td>`});
+      html+=`</tr>`;
+    });
+    html+=`</table></div>`;
+
+    // Feature importance
+    html+=`<div><h5 style="font-size:13px;margin-bottom:8px;color:var(--text-dim)">Top Features</h5>`;
+    const maxImp=Math.max(...d.feature_importance.map(f=>f.importance));
+    for(const f of d.feature_importance){
+      const pct=(f.importance/maxImp*100).toFixed(0);
+      html+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px">
+        <span style="width:120px;text-align:right;color:var(--text-dim)">${esc(f.name)}</span>
+        <div style="flex:1;background:var(--surface-2);border-radius:4px;height:16px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:4px"></div>
+        </div>
+        <span style="width:40px;font-family:var(--font-mono)">${(f.importance*100).toFixed(1)}</span>
+      </div>`;
+    }
+    html+=`</div></div>`;
+
+    // Per-class metrics
+    html+=`<div style="margin-top:16px"><h5 style="font-size:13px;margin-bottom:8px;color:var(--text-dim)">Per-Class Metrics</h5>
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+      <tr style="color:var(--text-dim)"><th style="text-align:left;padding:6px 8px">Class</th><th style="padding:6px 8px">Precision</th><th style="padding:6px 8px">Recall</th><th style="padding:6px 8px">F1</th><th style="padding:6px 8px">Support</th></tr>`;
+    for(const lbl of d.labels){
+      const m=d.report[lbl]||{};
+      html+=`<tr style="border-top:1px solid var(--border)">
+        <td style="padding:6px 8px;font-weight:600">${esc(lbl)}</td>
+        <td style="padding:6px 8px;text-align:center">${((m.precision||0)*100).toFixed(0)}%</td>
+        <td style="padding:6px 8px;text-align:center">${((m.recall||0)*100).toFixed(0)}%</td>
+        <td style="padding:6px 8px;text-align:center">${((m['f1-score']||0)*100).toFixed(0)}%</td>
+        <td style="padding:6px 8px;text-align:center">${m.support||0}</td></tr>`;
+    }
+    html+=`</table></div>`;
+
+    el.innerHTML=html;
+    if(d.saved_to_disk) clfSetModelState(true,true,d);
+    else clfLoadStatus();
+  }catch(e){st.textContent='';el.innerHTML=`<p style="color:var(--red)">${esc(e.message)}</p>`}
+}
+
+async function clfLoadStatus(){
+  try{
+    const r=await fetch('/api/classifier/status');
+    const d=await r.json();
+    clfSetModelState(d.has_model,d.saved_on_disk,d.metrics,d.record_count);
+  }catch(e){}
+}
+
+function clfSetModelState(hasModel,onDisk,metrics,recCount){
+  const el=$('clf-model-state');
+  if(!el) return;
+  if(hasModel){
+    const acc=metrics&&metrics.accuracy!=null?` · ${(metrics.accuracy*100).toFixed(1)}% acc`:'';
+    const disk=onDisk?' · 💾 saved':' · ⚠ not saved';
+    el.innerHTML=`<span style="color:var(--green)">● Model ready${acc}${disk}</span>`;
+  }else{
+    el.innerHTML='<span style="color:var(--text-dim)">○ No model trained yet</span>';
+  }
+}
+
+function clfDownloadModel(){
+  window.open('/api/classifier/download-model','_blank');
+}
+
+async function clfUploadModel(file){
+  if(!file) return;
+  const fd=new FormData(); fd.append('file',file);
+  toast('Loading model...');
+  try{
+    const r=await fetch('/api/classifier/upload-model',{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.ok){
+      toast(`Model restored — ${d.record_count} records`);
+      clfSetModelState(true,true,d.metrics,d.record_count);
+    }else{toast(d.error||'Upload failed')}
+  }catch(e){toast('Upload error: '+e.message)}
+}
+
+async function clfPredict(){
+  const address=$('clf-predict-input').value.trim();
+  if(!address){toast('Enter an address');return}
+  const el=$('clf-predict-result');
+  el.innerHTML='<p style="color:var(--text-dim)">Predicting...</p>';
+  try{
+    const r=await fetch('/api/classifier/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address})});
+    const d=await r.json();
+    if(!d.ok){el.innerHTML=`<p style="color:var(--red)">${esc(d.error)}</p>`;return}
+
+    const colors={Shipped:'var(--green)',Rejected:'var(--red)',Accepted:'var(--accent)'};
+    const conf=d.confidence;
+    let html=`<div style="padding:16px;background:var(--surface-2);border-radius:var(--radius);border-left:4px solid ${colors[d.prediction]||'var(--text-dim)'};margin-bottom:16px">
+      <div style="font-size:20px;font-weight:700;color:${colors[d.prediction]||'var(--text)'};margin-bottom:8px">${esc(d.prediction)}</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">`;
+    for(const [cls,prob] of Object.entries(conf)){
+      html+=`<div style="font-size:13px"><span style="color:var(--text-dim)">${esc(cls)}:</span> <strong>${(prob*100).toFixed(1)}%</strong></div>`;
+    }
+    html+=`</div></div>`;
+
+    // Confidence bar
+    html+=`<div style="display:flex;height:24px;border-radius:8px;overflow:hidden;margin-bottom:16px">`;
+    for(const [cls,prob] of Object.entries(conf)){
+      if(prob>0.01) html+=`<div style="width:${(prob*100).toFixed(1)}%;background:${colors[cls]||'var(--surface)'};display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:600">${(prob*100).toFixed(0)}%</div>`;
+    }
+    html+=`</div>`;
+
+    // Similar addresses
+    if(d.similar_in_training&&d.similar_in_training.length){
+      html+=`<h5 style="font-size:13px;margin-bottom:8px;color:var(--text-dim)">Similar Addresses in Training Data</h5>
+        <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <tr style="color:var(--text-dim)"><th style="text-align:left;padding:6px 8px">Address</th><th style="padding:6px 8px">Status</th><th style="padding:6px 8px">Similarity</th><th style="padding:6px 8px">Price</th></tr>`;
+      for(const s of d.similar_in_training){
+        html+=`<tr style="border-top:1px solid var(--border)">
+          <td style="padding:6px 8px;font-family:var(--font-mono);font-size:12px">${esc(s.address)}</td>
+          <td style="padding:6px 8px;text-align:center;color:${colors[s.status]||'var(--text)'};font-weight:600">${esc(s.status)}</td>
+          <td style="padding:6px 8px;text-align:center">${(s.similarity*100).toFixed(0)}%</td>
+          <td style="padding:6px 8px;text-align:center">${esc(s.price)}</td></tr>`;
+      }
+      html+=`</table>`;
+    }
+
+    el.innerHTML=html;
+  }catch(e){el.innerHTML=`<p style="color:var(--red)">${esc(e.message)}</p>`}
+}
+
+async function clfSearch(){
+  const q=$('clf-search-q').value.trim();
+  const status=$('clf-search-status').value;
+  const el=$('clf-search-results');
+  el.innerHTML='<p style="color:var(--text-dim)">Searching...</p>';
+  try{
+    const params=new URLSearchParams();
+    if(q) params.set('q',q);
+    if(status) params.set('status',status);
+    const r=await fetch('/api/classifier/search?'+params);
+    const d=await r.json();
+    if(!d.ok){el.innerHTML=`<p style="color:var(--red)">${esc(d.error)}</p>`;return}
+    if(!d.results.length){el.innerHTML='<p style="color:var(--text-dim)">No matches</p>';return}
+    const colors={Shipped:'var(--green)',Rejected:'var(--red)',Accepted:'var(--accent)'};
+    let html=`<p style="font-size:13px;color:var(--text-dim);margin-bottom:8px">${d.total} result${d.total!==1?'s':''}</p>
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+      <tr style="color:var(--text-dim)"><th style="text-align:left;padding:6px 8px">Address</th><th style="padding:6px 8px">Status</th><th style="padding:6px 8px">Match</th><th style="padding:6px 8px">Price</th></tr>`;
+    for(const s of d.results){
+      html+=`<tr style="border-top:1px solid var(--border)">
+        <td style="padding:6px 8px;font-family:var(--font-mono);font-size:12px;cursor:pointer;color:var(--accent)" onclick="navigator.clipboard.writeText(this.textContent);toast('Copied!')">${esc(s.address)}</td>
+        <td style="padding:6px 8px;text-align:center;color:${colors[s.status]||'var(--text)'};font-weight:600">${esc(s.status)}</td>
+        <td style="padding:6px 8px;text-align:center">${(s.similarity*100).toFixed(0)}%</td>
+        <td style="padding:6px 8px;text-align:center">${esc(s.price)}</td></tr>`;
+    }
+    html+=`</table>`;
+    el.innerHTML=html;
+  }catch(e){el.innerHTML=`<p style="color:var(--red)">${esc(e.message)}</p>`}
 }
 </script>
 </body>

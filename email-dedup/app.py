@@ -21,8 +21,20 @@ import difflib
 import zipfile
 from collections import Counter, defaultdict
 
+import math
+import pickle
 import pandas as pd
+import numpy as np
 from flask import Flask, render_template_string, request, send_file, jsonify, Response
+
+try:
+    from sklearn.ensemble import GradientBoostingClassifier
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+    from sklearn.preprocessing import LabelEncoder
+    HAS_SKLEARN = True
+except ImportError:
+    HAS_SKLEARN = False
 
 from pipeline import JOB, HAS_DISCORD
 
@@ -1778,6 +1790,372 @@ def api_discord_upload_data():
         "profiles": len(d["profiles"]),
         "events": len(d["events"]),
     })
+
+
+# ── Address Classifier (ML) ──────────────────────────────────────────────────
+
+# In-memory store for training data and model
+_clf_store = {
+    "records": [],       # [{status, address, price}, ...]
+    "model": None,       # trained sklearn model
+    "encoders": {},      # label encoders for categorical features
+    "metrics": None,     # last training metrics
+    "feature_names": [],
+}
+
+CLF_MODEL_PATH = os.path.join(BASE_DIR, "address_model.pkl")
+
+
+def _save_clf_model():
+    """Persist the trained model + encoders + records to disk."""
+    if _clf_store.get("model") is None:
+        return False
+    try:
+        with open(CLF_MODEL_PATH, "wb") as f:
+            pickle.dump({
+                "model":         _clf_store["model"],
+                "encoders":      _clf_store["encoders"],
+                "feature_names": _clf_store["feature_names"],
+                "metrics":       _clf_store["metrics"],
+                "records":       _clf_store["records"],
+            }, f)
+        return True
+    except Exception:
+        return False
+
+
+def _load_clf_model():
+    """Load a persisted model from disk into the store (called at startup)."""
+    if not os.path.exists(CLF_MODEL_PATH):
+        return False
+    try:
+        with open(CLF_MODEL_PATH, "rb") as f:
+            data = pickle.load(f)
+        _clf_store.update({
+            "model":         data.get("model"),
+            "encoders":      data.get("encoders", {}),
+            "feature_names": data.get("feature_names", []),
+            "metrics":       data.get("metrics"),
+            "records":       data.get("records", []),
+        })
+        return True
+    except Exception:
+        return False
+
+
+def _parse_training_data(text: str) -> list[dict]:
+    """Parse the Status / Address / Price line format."""
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    records = []
+    statuses = {"shipped", "rejected", "accepted"}
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        low = line.lower().rstrip(",").strip()
+
+        # Check if line starts with a status word
+        matched_status = None
+        for s in statuses:
+            if low == s:
+                matched_status = s
+                break
+            if low.startswith(s + " ") or low.startswith(s + "\t"):
+                matched_status = s
+                rest = line[len(s):].strip().rstrip(",")
+                if rest and rest.upper() != "ADDRESS NOT FOUND":
+                    records.append({"status": matched_status.capitalize(),
+                                    "address": rest, "price": ""})
+                i += 1
+                continue
+
+        if matched_status and matched_status == low:
+            address = lines[i + 1].rstrip(",") if i + 1 < len(lines) else ""
+            price = ""
+            if i + 2 < len(lines) and lines[i + 2].startswith("$"):
+                price = lines[i + 2]
+                i += 3
+            else:
+                i += 2
+            if address and address.upper() != "ADDRESS NOT FOUND":
+                records.append({"status": matched_status.capitalize(),
+                                "address": address, "price": price})
+        else:
+            i += 1
+    return records
+
+
+def _extract_address_features(address: str) -> dict:
+    """Extract ML features from a single address string."""
+    addr = address.strip()
+    parts = addr.split(",")
+    street_part = parts[0].strip() if parts else addr
+    city = parts[1].strip() if len(parts) > 1 else ""
+    state_zip = parts[2].strip() if len(parts) > 2 else ""
+
+    tokens = street_part.split()
+    house_num_raw = tokens[0] if tokens else ""
+
+    house_digits = re.sub(r"[^0-9]", "", house_num_raw)
+    house_num = int(house_digits) if house_digits else 0
+    has_letter_in_house = bool(re.search(r"[a-zA-Z]", house_num_raw))
+
+    street_tokens = tokens[1:] if len(tokens) > 1 else []
+    suffix_token = ""
+    street_name = ""
+    for st in reversed(street_tokens):
+        up = st.upper().rstrip(".,")
+        if up in _ALL_SUFFIX_STRINGS or up in _SUFFIX_REVERSE:
+            suffix_token = up
+            idx = street_tokens.index(st)
+            street_name = " ".join(street_tokens[:idx]).upper()
+            break
+    if not street_name and street_tokens:
+        street_name = " ".join(street_tokens).upper()
+
+    unit_keywords = {"APT", "#", "UNIT", "STE", "SUITE", "FLOOR", "FL"}
+    has_unit = any(t.upper().rstrip(".,") in unit_keywords for t in street_tokens)
+    after_suffix = ""
+    if suffix_token:
+        found_suffix = False
+        for t in street_tokens:
+            if found_suffix:
+                after_suffix += t + " "
+            if t.upper().rstrip(".,") == suffix_token:
+                found_suffix = True
+        after_suffix = after_suffix.strip()
+    has_secondary_num = bool(after_suffix) or has_unit
+
+    zip_match = re.search(r"\b(\d{5})\b", state_zip)
+    zip_code = int(zip_match.group(1)) if zip_match else 0
+    state = re.sub(r"\d", "", state_zip).strip().upper()
+
+    addr_len = len(addr)
+    word_count = len(addr.split())
+    has_hash = "#" in addr
+    has_apt = "apt" in addr.lower()
+    digit_count = sum(c.isdigit() for c in addr)
+    letter_count = sum(c.isalpha() for c in addr)
+
+    return {
+        "house_num": house_num, "has_letter_in_house": int(has_letter_in_house),
+        "street_name": street_name, "suffix": suffix_token,
+        "city": city.upper(), "state": state, "zip_code": zip_code,
+        "has_unit": int(has_unit), "has_secondary_num": int(has_secondary_num),
+        "addr_len": addr_len, "word_count": word_count,
+        "has_hash": int(has_hash), "has_apt": int(has_apt),
+        "digit_count": digit_count, "letter_count": letter_count,
+        "digit_ratio": round(digit_count / max(addr_len, 1), 3),
+    }
+
+
+def _build_feature_matrix(records):
+    """Convert records into feature matrix (X) and labels (y)."""
+    raw_features = [_extract_address_features(r["address"]) for r in records]
+    labels = [r["status"] for r in records]
+
+    cat_cols = ["street_name", "suffix", "city", "state"]
+    num_cols = ["house_num", "has_letter_in_house", "zip_code", "has_unit",
+                "has_secondary_num", "addr_len", "word_count", "has_hash",
+                "has_apt", "digit_count", "letter_count", "digit_ratio"]
+
+    encoders = {}
+    rows = []
+    for feat in raw_features:
+        row = [feat[c] for c in num_cols]
+        for c in cat_cols:
+            if c not in encoders:
+                encoders[c] = LabelEncoder()
+                all_vals = list(set(f[c] for f in raw_features))
+                encoders[c].fit(all_vals + ["__UNKNOWN__"])
+            val = feat[c]
+            if val in encoders[c].classes_:
+                row.append(encoders[c].transform([val])[0])
+            else:
+                row.append(encoders[c].transform(["__UNKNOWN__"])[0])
+        rows.append(row)
+
+    feature_names = num_cols + [f"{c}_enc" for c in cat_cols]
+    X = np.array(rows, dtype=float)
+    y = np.array(labels)
+    return X, y, encoders, feature_names
+
+
+def _featurize_single(address, encoders, feature_names):
+    """Featurize a single address using stored encoders."""
+    feat = _extract_address_features(address)
+    num_cols = ["house_num", "has_letter_in_house", "zip_code", "has_unit",
+                "has_secondary_num", "addr_len", "word_count", "has_hash",
+                "has_apt", "digit_count", "letter_count", "digit_ratio"]
+    cat_cols = ["street_name", "suffix", "city", "state"]
+    row = [feat[c] for c in num_cols]
+    for c in cat_cols:
+        val = feat[c]
+        enc = encoders.get(c)
+        if enc and val in enc.classes_:
+            row.append(enc.transform([val])[0])
+        elif enc:
+            row.append(enc.transform(["__UNKNOWN__"])[0])
+        else:
+            row.append(0)
+    return np.array([row], dtype=float)
+
+
+@app.route("/api/classifier/upload", methods=["POST"])
+def api_classifier_upload():
+    text = ""
+    if request.files.get("file"):
+        text = request.files["file"].read().decode("utf-8", errors="replace")
+    elif request.is_json:
+        text = (request.get_json(force=True, silent=True) or {}).get("text", "")
+    else:
+        text = request.form.get("text", "")
+    if not text.strip():
+        return jsonify({"ok": False, "error": "No data provided"}), 400
+    records = _parse_training_data(text)
+    if not records:
+        return jsonify({"ok": False, "error": "Could not parse any records"}), 400
+    _clf_store["records"] = records
+    _clf_store["model"] = None
+    _clf_store["metrics"] = None
+    status_counts = Counter(r["status"] for r in records)
+    return jsonify({"ok": True, "total": len(records),
+                    "by_status": dict(status_counts), "sample": records[:5]})
+
+
+@app.route("/api/classifier/train", methods=["POST"])
+def api_classifier_train():
+    if not HAS_SKLEARN:
+        return jsonify({"ok": False, "error": "scikit-learn not installed"}), 500
+    records = _clf_store["records"]
+    if len(records) < 5:
+        return jsonify({"ok": False, "error": f"Need ≥5 records, got {len(records)}"}), 400
+    try:
+        X, y, encoders, feature_names = _build_feature_matrix(records)
+        counts = Counter(y)
+        min_class = min(counts.values())
+        stratify = y if min_class >= 2 else None
+        test_size = 0.2 if min_class >= 5 else 0.3
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=42, stratify=stratify)
+        model = GradientBoostingClassifier(
+            n_estimators=100, max_depth=4, learning_rate=0.1, random_state=42)
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        acc = accuracy_score(y_test, y_pred)
+        report = classification_report(y_test, y_pred, output_dict=True, zero_division=0)
+        cm = confusion_matrix(y_test, y_pred, labels=model.classes_).tolist()
+        importances = sorted(zip(feature_names, model.feature_importances_),
+                             key=lambda x: -x[1])[:10]
+        _clf_store.update({"model": model, "encoders": encoders,
+                           "feature_names": feature_names})
+        metrics = {
+            "accuracy": round(acc, 4), "report": report,
+            "confusion_matrix": cm, "labels": model.classes_.tolist(),
+            "feature_importance": [{"name": n, "importance": round(float(v), 4)}
+                                   for n, v in importances],
+            "train_size": len(X_train), "test_size": len(X_test),
+        }
+        _clf_store["metrics"] = metrics
+        saved = _save_clf_model()
+        return jsonify({"ok": True, "saved_to_disk": saved, **metrics})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 500
+
+
+@app.route("/api/classifier/predict", methods=["POST"])
+def api_classifier_predict():
+    model = _clf_store.get("model")
+    if model is None:
+        return jsonify({"ok": False, "error": "No trained model — upload data and train first"}), 400
+    body = request.get_json(force=True, silent=True) or {}
+    address = (body.get("address") or "").strip()
+    if not address:
+        return jsonify({"ok": False, "error": "address is required"}), 400
+    try:
+        X = _featurize_single(address, _clf_store["encoders"], _clf_store["feature_names"])
+        pred = model.predict(X)[0]
+        proba = model.predict_proba(X)[0]
+        class_probs = {cls: round(float(p), 4) for cls, p in zip(model.classes_, proba)}
+        # Find similar addresses in training data
+        similar = []
+        for r in _clf_store["records"]:
+            ratio = difflib.SequenceMatcher(None, address.lower(), r["address"].lower()).ratio()
+            if ratio > 0.55:
+                similar.append({"address": r["address"], "status": r["status"],
+                                "price": r["price"], "similarity": round(ratio, 3)})
+        similar.sort(key=lambda x: -x["similarity"])
+        return jsonify({"ok": True, "prediction": pred, "confidence": class_probs,
+                        "features": _extract_address_features(address),
+                        "similar_in_training": similar[:10]})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/classifier/search")
+def api_classifier_search():
+    q = (request.args.get("q") or "").strip().lower()
+    status_filter = (request.args.get("status") or "").strip()
+    if not _clf_store["records"]:
+        return jsonify({"ok": False, "error": "No data loaded"}), 400
+    results = []
+    for r in _clf_store["records"]:
+        if status_filter and r["status"].lower() != status_filter.lower():
+            continue
+        if q:
+            ratio = difflib.SequenceMatcher(None, q, r["address"].lower()).ratio()
+            if ratio < 0.4 and q not in r["address"].lower():
+                continue
+            results.append({**r, "similarity": round(ratio, 3)})
+        else:
+            results.append({**r, "similarity": 1.0})
+    results.sort(key=lambda x: -x["similarity"])
+    return jsonify({"ok": True, "total": len(results), "results": results[:100]})
+
+
+@app.route("/api/classifier/status")
+def api_classifier_status():
+    """Report whether a model is loaded and from where."""
+    return jsonify({
+        "has_model":     _clf_store.get("model") is not None,
+        "has_sklearn":   HAS_SKLEARN,
+        "record_count":  len(_clf_store.get("records", [])),
+        "saved_on_disk": os.path.exists(CLF_MODEL_PATH),
+        "metrics":       _clf_store.get("metrics"),
+    })
+
+
+@app.route("/api/classifier/download-model")
+def api_classifier_download_model():
+    """Download the trained model .pkl for backup."""
+    if not os.path.exists(CLF_MODEL_PATH):
+        if not _save_clf_model():
+            return jsonify({"ok": False, "error": "No trained model to download"}), 404
+    return send_file(CLF_MODEL_PATH, as_attachment=True,
+                     download_name="address_model.pkl",
+                     mimetype="application/octet-stream")
+
+
+@app.route("/api/classifier/upload-model", methods=["POST"])
+def api_classifier_upload_model():
+    """Restore a previously downloaded model .pkl."""
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"ok": False, "error": "No file provided"}), 400
+    try:
+        f.save(CLF_MODEL_PATH)
+        if _load_clf_model():
+            return jsonify({
+                "ok": True,
+                "record_count": len(_clf_store.get("records", [])),
+                "metrics": _clf_store.get("metrics"),
+            })
+        return jsonify({"ok": False, "error": "File is not a valid model"}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# Load persisted model at import time (survives restarts if disk persists)
+_load_clf_model()
 
 
 # ── HTML ─────────────────────────────────────────────────────────────────────
